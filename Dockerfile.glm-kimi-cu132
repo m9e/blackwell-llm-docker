@@ -34,6 +34,9 @@ ARG VLLM_REPO=https://github.com/voipmonitor/vllm.git
 ARG VLLM_REF=codex/glm51-kimi-canonical-rebase-test-20260514
 ARG VLLM_COMMIT=5de88dbd6ca3486bd1dbe247fc08f96cdc7b2d2c
 ARG VLLM_BUILD_VERSION=0.20.2+glm51kimi.cu132.20260518
+ARG LAUNCHER_REPO=https://github.com/voipmonitor/vllm.git
+ARG LAUNCHER_REF=codex/glm51-kimi-canonical-rebase-test-20260514
+ARG LAUNCHER_COMMIT=5de88dbd6ca3486bd1dbe247fc08f96cdc7b2d2c
 
 ARG CUTLASS_REPO=https://github.com/NVIDIA/cutlass.git
 ARG CUTLASS_REF=main
@@ -185,6 +188,9 @@ ARG VLLM_REPO
 ARG VLLM_REF
 ARG VLLM_COMMIT
 ARG VLLM_BUILD_VERSION
+ARG LAUNCHER_REPO
+ARG LAUNCHER_REF
+ARG LAUNCHER_COMMIT
 ARG CUTLASS_REPO
 ARG CUTLASS_REF
 ARG VLLM_MAX_JOBS
@@ -264,8 +270,17 @@ RUN --mount=type=cache,target=/root/.ccache \
     CMAKE_BUILD_PARALLEL_LEVEL="${VLLM_MAX_JOBS}" \
     NVCC_THREADS="${VLLM_NVCC_THREADS}" \
     python -m pip install --no-build-isolation --no-deps --force-reinstall . \
- && install -m 0755 scripts/run-glm51-vllm /usr/local/bin/run-glm51-vllm \
- && install -m 0755 scripts/run-kimi26-vllm /usr/local/bin/run-kimi26-vllm \
+ && launcher_root=/opt/vllm \
+ && if [[ ! -f "${launcher_root}/scripts/run-glm51-vllm" || ! -f "${launcher_root}/scripts/run-kimi26-vllm" ]]; then \
+      git clone --filter=blob:none "${LAUNCHER_REPO}" /tmp/vllm-launchers; \
+      cd /tmp/vllm-launchers; \
+      git checkout "${LAUNCHER_REF}"; \
+      test "$(git rev-parse HEAD)" = "${LAUNCHER_COMMIT}"; \
+      launcher_root=/tmp/vllm-launchers; \
+      cd /opt/vllm; \
+    fi \
+ && install -m 0755 "${launcher_root}/scripts/run-glm51-vllm" /usr/local/bin/run-glm51-vllm \
+ && install -m 0755 "${launcher_root}/scripts/run-kimi26-vllm" /usr/local/bin/run-kimi26-vllm \
  && bash -n /usr/local/bin/run-glm51-vllm \
  && bash -n /usr/local/bin/run-kimi26-vllm \
  && for so in \
@@ -315,6 +330,7 @@ SH
 RUN python -m pip install --force-reinstall --no-deps nvidia-cutlass-dsl-libs-cu13==4.5.1 \
  && python -m pip cache purge || true \
  && rm -rf /tmp/flashinfer-src /tmp/flashinfer-wheels /root/.cache/pip /tmp/pip-* \
+ && rm -rf /tmp/vllm-launchers \
  && rm -rf \
       /opt/vllm/.deps \
       /opt/vllm/.git \
@@ -335,6 +351,8 @@ FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu${UBUNTU_VERSION} AS final
 
 ARG PYTHON_VERSION
 ARG NCCL_SONAME
+ARG VLLM_REPO
+ARG VLLM_REF
 ARG VLLM_COMMIT
 ARG B12X_COMMIT
 ARG FLASHINFER_COMMIT
@@ -432,14 +450,14 @@ WORKDIR /
 
 CMD ["/usr/local/bin/run-kimi26-vllm"]
 
-LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM GLM/Kimi image with PyTorch 2.12 cu132, patched NCCL 2.30.4, FlashInfer git, B12X and canonical vLLM" \
+LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM GLM/Kimi image with PyTorch 2.12 cu132, patched NCCL 2.30.4, FlashInfer git, B12X and pinned vLLM" \
       local-inference.cuda.version="13.2.1" \
       local-inference.torch.version="2.12.0+cu132" \
       local-inference.nccl.repo="local-inference-lab/nccl-canonical" \
       local-inference.nccl.branch="canonical/cu132-nccl2304-amd-noxml" \
       local-inference.nccl.version="2.30.4" \
-      local-inference.vllm.repo="voipmonitor/vllm" \
-      local-inference.vllm.branch="codex/glm51-kimi-canonical-rebase-test-20260514" \
+      local-inference.vllm.repo="${VLLM_REPO}" \
+      local-inference.vllm.branch="${VLLM_REF}" \
       local-inference.vllm.commit="${VLLM_COMMIT}" \
       local-inference.b12x.commit="${B12X_COMMIT}" \
       local-inference.flashinfer.commit="${FLASHINFER_COMMIT}"
