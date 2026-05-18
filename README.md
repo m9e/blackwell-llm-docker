@@ -14,7 +14,7 @@ Base image for cu132 (torch + FlashInfer compiled from source):
 
 | Image | Dockerfile | Stack |
 |-------|-----------|-------|
-| `voipmonitor/torch:cu132` | `Dockerfile.torch-cu132` | CUDA 13.2, torch 2.12 from source (no pip nvidia-*), FlashInfer from source |
+| `voipmonitor/torch:cu132` | `Dockerfile.torch-cu132` | CUDA 13.2, torch 2.12 from source (no pip nvidia-*), FlashInfer from source, patched NCCL 2.30.4 no-XML AMD/PCIe topology fixes |
 
 ## Quick start
 
@@ -87,6 +87,7 @@ docker build --build-arg CACHEBUST=$(date +%s) -f Dockerfile.vllm-cu130 -t voipm
 - **FlashInfer from source** with PR #2913 (GDC for SM120) — no prebuilt cubin/jit-cache that would override patched kernels
 - **b12x backend** (lukealonso) — TP-only NVFP4 MoE/GEMM for SM120
 - **PCIe allreduce** — custom allreduce for PCIe topologies (cu130 only)
+- **Patched NCCL for CUDA 13.2** — `Dockerfile.torch-cu132` builds NCCL from `local-inference-lab/nccl-canonical:canonical/cu132-nccl2304-amd-noxml` and preloads `/opt/libnccl-local-inference.so.2.30.4` so DCP can run without hand-written NCCL XML topology files.
 - **nvidia-cublas pinned to 13.1** (cu130) — 13.3 causes illegal memory access on CUDA 13.0 toolkit
 - **Model profiles** — preconfigured launch configs via `MODEL_PROFILE` env var
 - **Adaptive speculative decoding** (PR #21599) — dynamically adjusts num_steps
