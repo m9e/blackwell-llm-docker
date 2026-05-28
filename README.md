@@ -76,38 +76,47 @@ docker build --build-arg CACHEBUST=$(date +%s) -f Dockerfile.sglang-cu132 -t voi
 # vLLM cu130
 docker build --build-arg CACHEBUST=$(date +%s) -f Dockerfile.vllm-cu130 -t voipmonitor/vllm:cu130 .
 
-# Clean GLM/Kimi vLLM cu132
+# Clean GLM/Kimi vLLM cu132. This builds the reusable system/build base images
+# first, then builds the final vLLM image from those base images.
 IMAGE=voipmonitor/vllm:glm-kimi-cu132-20260518 ./build-glm-kimi-cu132.sh
 ```
 
 ### Current GLM/Kimi CUDA 13.2 base image
 
-The current base image is the `base` stage from `Dockerfile.glm-kimi-cu132`.
-It is intentionally built from the public NVIDIA CUDA 13.2.1 cuDNN devel image,
-not from an older `voipmonitor/vllm` image.
+The GLM/Kimi build uses two reusable base images:
+
+- `voipmonitor/vllm:glm-kimi-cu132-system-base-20260528`: CUDA 13.2.1 cuDNN devel base, cuBLAS 13.4.1, cuDNN 9.22, Python 3.12, build/runtime OS packages, and patched NCCL 2.30.4.
+- `voipmonitor/vllm:glm-kimi-cu132-build-base-20260528`: the system base plus `/opt/venv` with PyTorch `2.12.0+cu132`, torchvision `0.27.0+cu132`, CUDA tile, and CUTLASS DSL `4.5.2`.
+
+The final image is built `FROM` the system base and copies the completed vLLM
+venv from the build stages. This keeps the final image from carrying a stale
+base venv while avoiding repeated apt/PyTorch downloads on normal source-only
+rebases.
 
 ```bash
 git clone https://github.com/local-inference-lab/blackwell-llm-docker.git
 cd blackwell-llm-docker
 
-DOCKER_BUILDKIT=1 docker build \
-  --progress=plain \
-  -f Dockerfile.glm-kimi-cu132 \
-  --target base \
-  -t local-inference/glm-kimi-cu132-base:test \
-  .
+SYSTEM_BASE_IMAGE=voipmonitor/vllm:glm-kimi-cu132-system-base-20260528 \
+BUILD_BASE_IMAGE_TAG=voipmonitor/vllm:glm-kimi-cu132-build-base-20260528 \
+IMAGE=voipmonitor/vllm:glm-kimi-cu132-20260518 \
+./build-glm-kimi-cu132.sh
+
+# Push the reusable base images when publishing a new stack baseline.
+SYSTEM_BASE_IMAGE=voipmonitor/vllm:glm-kimi-cu132-system-base-20260528 \
+BUILD_BASE_IMAGE_TAG=voipmonitor/vllm:glm-kimi-cu132-build-base-20260528 \
+IMAGE=voipmonitor/vllm:glm-kimi-cu132-20260518 \
+PUSH_BASE_IMAGE=1 \
+./build-glm-kimi-cu132.sh
 ```
 
 Useful sanity check after the build:
 
 ```bash
-docker run --rm local-inference/glm-kimi-cu132-base:test bash -lc '
+docker run --rm voipmonitor/vllm:glm-kimi-cu132-system-base-20260528 bash -lc '
 python --version
-python - <<PY
-import torch
-print(torch.__version__, torch.version.cuda)
-PY
 nvcc --version | tail -n 1
+strings /opt/libnccl-local-inference.so.2.30.4 | grep "NCCL version 2.30.4 compiled with CUDA 13.2"
 dpkg-query -W \
   "cuda-compat-13-2" \
   "cublas-cuda-13" \
@@ -116,6 +125,15 @@ dpkg-query -W \
   "libcudnn9-cuda-13" \
   "libcudnn9-dev-cuda-13" \
   "libcudnn9-headers-cuda-13"
+'
+
+docker run --rm voipmonitor/vllm:glm-kimi-cu132-build-base-20260528 bash -lc '
+python - <<PY
+import torch
+import cutlass
+print(torch.__version__, torch.version.cuda)
+print(cutlass.__file__)
+PY
 '
 ```
 
@@ -137,14 +155,15 @@ dpkg-query -W \
 
 ## GLM/Kimi CUDA 13.2 Image
 
-`Dockerfile.glm-kimi-cu132` is intentionally self-contained: it starts from
-`nvidia/cuda:13.2.1-cudnn-devel-ubuntu24.04` and does not inherit from any
-previous `voipmonitor/vllm` image. It keeps the CUDA toolkit on 13.2.1, overlays
-the latest CUDA 13 library packages currently used by this image (`cuBLAS`
-13.4.1, `cuDNN` 9.22, `cuda-compat-13-2` 595.71), installs PyTorch
-`2.12.0+cu132` from the official PyTorch wheel index, builds patched NCCL
-`2.30.4` from `local-inference-lab/nccl-canonical`, then builds FlashInfer,
-B12X and the canonical GLM/Kimi vLLM branch.
+`Dockerfile.glm-kimi-cu132` is intentionally based on reusable base images that
+are themselves built from `nvidia/cuda:13.2.1-cudnn-devel-ubuntu24.04`, not from
+an older `voipmonitor/vllm` image. The system base keeps the CUDA toolkit on
+13.2.1, overlays the latest CUDA 13 library packages currently used by this
+image (`cuBLAS` 13.4.1, `cuDNN` 9.22, `cuda-compat-13-2` 595.71), and includes
+patched NCCL `2.30.4` from `local-inference-lab/nccl-canonical`. The build base
+adds PyTorch `2.12.0+cu132` from the official PyTorch wheel index and CUTLASS
+DSL. The final image then builds FlashInfer, B12X and the canonical GLM/Kimi
+vLLM branch on top of those bases.
 
 The final image defaults to `/usr/local/bin/run-kimi26-vllm`; GLM is available
 through `/usr/local/bin/run-glm51-vllm`.

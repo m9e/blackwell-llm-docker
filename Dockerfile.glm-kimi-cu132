@@ -23,6 +23,8 @@ ARG PYTHON_VERSION=3.12
 ARG CUBLAS_CUDA13_VERSION=13.4.1.2-1
 ARG CUDNN_CUDA13_VERSION=9.22.0.52-1
 ARG CUDA_COMPAT_13_2_VERSION=595.71.05-1ubuntu1
+ARG GLM_KIMI_CU132_SYSTEM_BASE_IMAGE=glm-kimi-cu132-system-base-build
+ARG GLM_KIMI_CU132_BUILD_BASE_IMAGE=glm-kimi-cu132-build-base-build
 
 ARG NCCL_REPO=https://github.com/local-inference-lab/nccl-canonical.git
 ARG NCCL_REF=canonical/cu132-nccl2304-amd-noxml
@@ -90,14 +92,12 @@ RUN git clone "${NCCL_REPO}" nccl \
  && strings "build/lib/libnccl.so.2.30.4" | grep -F "NCCL version 2.30.4 compiled with CUDA 13.2"
 
 # =============================================================================
-# Stage 1: CUDA/PyTorch runtime + build base
+# Stage 1: reusable CUDA/Python/NCCL system base
 # =============================================================================
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu${UBUNTU_VERSION} AS base
+FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu${UBUNTU_VERSION} AS glm-kimi-cu132-system-base-build
 
 ARG PYTHON_VERSION
 ARG NCCL_SONAME
-ARG MAX_JOBS
-ARG NVCC_THREADS
 ARG CUBLAS_CUDA13_VERSION
 ARG CUDNN_CUDA13_VERSION
 ARG CUDA_COMPAT_13_2_VERSION
@@ -156,11 +156,7 @@ RUN for attempt in {1..5}; do \
     && rm -rf /var/lib/apt/lists/*
 
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 \
- && update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1 \
- && python -m venv /opt/venv
-
-ENV VIRTUAL_ENV=/opt/venv \
-    PATH="/opt/venv/bin:${PATH}"
+ && update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
 
 COPY --from=nccl-build /build/nccl/build/lib/${NCCL_SONAME} /opt/libnccl-local-inference.so.2.30.4
 
@@ -168,6 +164,27 @@ ENV NCCL_LOCAL_INFERENCE_PATH=/opt/libnccl-local-inference.so.2.30.4 \
     NCCL_PR2127_PATH=/opt/libnccl-local-inference.so.2.30.4 \
     VLLM_NCCL_SO_PATH=/opt/libnccl-local-inference.so.2.30.4 \
     NCCL_GRAPH_FILE=""
+
+LABEL org.opencontainers.image.description="Reusable CUDA 13.2.1 GLM/Kimi system base with latest CUDA 13.2-compatible cuBLAS/cuDNN overlays and patched NCCL 2.30.4" \
+      local-inference.cuda.version="13.2.1" \
+      local-inference.cuda.compat.version="${CUDA_COMPAT_13_2_VERSION}" \
+      local-inference.cublas.version="${CUBLAS_CUDA13_VERSION}" \
+      local-inference.cudnn.version="${CUDNN_CUDA13_VERSION}" \
+      local-inference.nccl.repo="local-inference-lab/nccl-canonical" \
+      local-inference.nccl.branch="canonical/cu132-nccl2304-amd-noxml" \
+      local-inference.nccl.version="2.30.4"
+
+# =============================================================================
+# Stage 1b: reusable PyTorch/CUTLASS build base
+# =============================================================================
+FROM ${GLM_KIMI_CU132_SYSTEM_BASE_IMAGE} AS glm-kimi-cu132-build-base-build
+
+SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+
+RUN python -m venv /opt/venv
+
+ENV VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:${PATH}"
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m pip install --upgrade "pip<26" setuptools wheel \
@@ -201,8 +218,23 @@ ENV CCACHE_DIR=/root/.ccache \
     FLASHINFER_LOCAL_VERSION=cu132 \
     FLASHINFER_NVCC_THREADS=1 \
     FLASHINFER_DISABLE_VERSION_CHECK=1 \
-    AOT_MAX_JOBS_CAP=8 \
-    MAX_JOBS=${MAX_JOBS} \
+    AOT_MAX_JOBS_CAP=8
+
+LABEL org.opencontainers.image.description="Reusable CUDA 13.2.1 GLM/Kimi build base with PyTorch 2.12 cu132 and CUTLASS DSL" \
+      local-inference.torch.version="2.12.0+cu132" \
+      local-inference.cutlass_dsl.version="4.5.2"
+
+# =============================================================================
+# Stage 1c: build settings overlay
+# =============================================================================
+FROM ${GLM_KIMI_CU132_BUILD_BASE_IMAGE} AS base
+
+ARG MAX_JOBS
+ARG NVCC_THREADS
+
+SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
+
+ENV MAX_JOBS=${MAX_JOBS} \
     NVCC_THREADS=${NVCC_THREADS}
 
 # CUDA 13.x headers can be laid out under cccl/. Keep both old and new include
@@ -407,74 +439,15 @@ RUN python -m pip install --force-reinstall --no-deps nvidia-cutlass-dsl-libs-cu
 # =============================================================================
 # Stage 3: clean final runtime
 # =============================================================================
-FROM nvidia/cuda:${CUDA_VERSION}-cudnn-devel-ubuntu${UBUNTU_VERSION} AS final
-
-ARG PYTHON_VERSION
-ARG NCCL_SONAME
-ARG CUBLAS_CUDA13_VERSION
-ARG CUDNN_CUDA13_VERSION
-ARG CUDA_COMPAT_13_2_VERSION
-ARG DEBIAN_FRONTEND=noninteractive
+FROM ${GLM_KIMI_CU132_SYSTEM_BASE_IMAGE} AS final
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
-
-ENV LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-# Keep the toolkit on 13.2.1, but overlay the latest CUDA 13 libraries NVIDIA
-# publishes for Ubuntu 24.04 without pulling CUDA 13.3 packages.
-RUN for attempt in {1..5}; do \
-      if apt-get update; then break; fi; \
-      if [[ "${attempt}" == "5" ]]; then exit 1; fi; \
-      rm -rf /var/lib/apt/lists/*; \
-      sleep $((attempt * 10)); \
-    done \
-    && apt-get install -y --allow-change-held-packages --no-install-recommends \
-    python${PYTHON_VERSION} \
-    python${PYTHON_VERSION}-dev \
-    python${PYTHON_VERSION}-venv \
-    python3-pip \
-    git \
-    git-lfs \
-    curl \
-    ca-certificates \
-    gcc \
-    g++ \
-    libc6-dev \
-    libgomp1 \
-    numactl \
-    libnuma1 \
-    libibverbs1 \
-    libjpeg8 \
-    libpng16-16t64 \
-    ninja-build \
-    ccache \
-    cmake \
-    patchelf \
-    pciutils \
-    cuda-compat-13-2=${CUDA_COMPAT_13_2_VERSION} \
-    libcublas13-cuda-13=${CUBLAS_CUDA13_VERSION} \
-    libcublas13-dev-cuda-13=${CUBLAS_CUDA13_VERSION} \
-    cublas-cuda-13=${CUBLAS_CUDA13_VERSION} \
-    libcudnn9-cuda-13=${CUDNN_CUDA13_VERSION} \
-    libcudnn9-dev-cuda-13=${CUDNN_CUDA13_VERSION} \
-    libcudnn9-headers-cuda-13=${CUDNN_CUDA13_VERSION} \
-    libcudnn9-static-cuda-13=${CUDNN_CUDA13_VERSION} \
-    && ldconfig \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1 \
- && update-alternatives --install /usr/bin/python python /usr/bin/python${PYTHON_VERSION} 1
 
 COPY --from=vllm-build /opt/venv /opt/venv
 COPY --from=vllm-build /opt/vllm /opt/vllm
 COPY --from=vllm-build /usr/local/bin/run-glm51-vllm /usr/local/bin/run-glm51-vllm
 COPY --from=vllm-build /usr/local/bin/run-kimi26-vllm /usr/local/bin/run-kimi26-vllm
 COPY --from=vllm-build /usr/local/bin/verify-glm-kimi-cu132 /usr/local/bin/verify-glm-kimi-cu132
-COPY --from=nccl-build /build/nccl/build/lib/${NCCL_SONAME} /opt/libnccl-local-inference.so.2.30.4
 
 RUN --mount=type=cache,target=/root/.cache/pip \
     printf 'torch==2.12.0+cu132\ntorchvision==0.27.0+cu132\n' > /tmp/torch-cu132-constraints.txt \
@@ -546,6 +519,9 @@ ARG B12X_REF
 ARG B12X_COMMIT
 ARG FLASHINFER_REF
 ARG FLASHINFER_COMMIT
+ARG CUBLAS_CUDA13_VERSION
+ARG CUDNN_CUDA13_VERSION
+ARG CUDA_COMPAT_13_2_VERSION
 
 LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM GLM/Kimi image with PyTorch 2.12 cu132, patched NCCL 2.30.4, FlashInfer git, B12X and canonical vLLM branch" \
       local-inference.cuda.version="13.2.1" \

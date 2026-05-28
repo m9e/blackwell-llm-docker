@@ -2,6 +2,10 @@
 set -euo pipefail
 
 IMAGE="${IMAGE:-voipmonitor/vllm:glm-kimi-cu132-20260518}"
+SYSTEM_BASE_IMAGE="${SYSTEM_BASE_IMAGE:-voipmonitor/vllm:glm-kimi-cu132-system-base-20260528}"
+BUILD_BASE_IMAGE_TAG="${BUILD_BASE_IMAGE_TAG:-voipmonitor/vllm:glm-kimi-cu132-build-base-20260528}"
+BUILD_BASE_IMAGE="${BUILD_BASE_IMAGE:-1}"
+PUSH_BASE_IMAGE="${PUSH_BASE_IMAGE:-0}"
 MAX_JOBS="${MAX_JOBS:-128}"
 VLLM_MAX_JOBS="${VLLM_MAX_JOBS:-128}"
 NVCC_THREADS="${NVCC_THREADS:-1}"
@@ -63,6 +67,10 @@ else
 fi
 
 echo "Building ${IMAGE}"
+echo "  SYSTEM_BASE_IMAGE=${SYSTEM_BASE_IMAGE}"
+echo "  BUILD_BASE_IMAGE_TAG=${BUILD_BASE_IMAGE_TAG}"
+echo "  BUILD_BASE_IMAGE=${BUILD_BASE_IMAGE}"
+echo "  PUSH_BASE_IMAGE=${PUSH_BASE_IMAGE}"
 echo "  MAX_JOBS=${MAX_JOBS}"
 echo "  VLLM_MAX_JOBS=${VLLM_MAX_JOBS}"
 echo "  NVCC_THREADS=${NVCC_THREADS}"
@@ -74,7 +82,36 @@ echo "  LAUNCHER_REF=${LAUNCHER_REF} ${LAUNCHER_COMMIT}"
 echo "  CUTLASS_REF=${CUTLASS_REF} ${CUTLASS_COMMIT}"
 echo "  NCCL_REF=${NCCL_REF} ${NCCL_COMMIT}"
 
+if [[ "${BUILD_BASE_IMAGE}" == "1" ]]; then
+  DOCKER_BUILDKIT=1 docker build \
+    --target glm-kimi-cu132-system-base-build \
+    --build-arg NCCL_REPO="${NCCL_REPO}" \
+    --build-arg NCCL_REF="${NCCL_REF}" \
+    --build-arg NCCL_COMMIT="${NCCL_COMMIT}" \
+    --progress=plain \
+    -f Dockerfile.glm-kimi-cu132 \
+    -t "${SYSTEM_BASE_IMAGE}" \
+    "$@" \
+    .
+
+  DOCKER_BUILDKIT=1 docker build \
+    --target glm-kimi-cu132-build-base-build \
+    --build-arg GLM_KIMI_CU132_SYSTEM_BASE_IMAGE="${SYSTEM_BASE_IMAGE}" \
+    --progress=plain \
+    -f Dockerfile.glm-kimi-cu132 \
+    -t "${BUILD_BASE_IMAGE_TAG}" \
+    "$@" \
+    .
+
+  if [[ "${PUSH_BASE_IMAGE}" == "1" ]]; then
+    docker push "${SYSTEM_BASE_IMAGE}"
+    docker push "${BUILD_BASE_IMAGE_TAG}"
+  fi
+fi
+
 DOCKER_BUILDKIT=1 docker build \
+  --build-arg GLM_KIMI_CU132_SYSTEM_BASE_IMAGE="${SYSTEM_BASE_IMAGE}" \
+  --build-arg GLM_KIMI_CU132_BUILD_BASE_IMAGE="${BUILD_BASE_IMAGE_TAG}" \
   --build-arg MAX_JOBS="${MAX_JOBS}" \
   --build-arg VLLM_MAX_JOBS="${VLLM_MAX_JOBS}" \
   --build-arg NVCC_THREADS="${NVCC_THREADS}" \
