@@ -414,13 +414,6 @@ ARG NCCL_SONAME
 ARG CUBLAS_CUDA13_VERSION
 ARG CUDNN_CUDA13_VERSION
 ARG CUDA_COMPAT_13_2_VERSION
-ARG VLLM_REPO
-ARG VLLM_REF
-ARG VLLM_COMMIT
-ARG B12X_REF
-ARG B12X_COMMIT
-ARG FLASHINFER_REF
-ARG FLASHINFER_COMMIT
 ARG DEBIAN_FRONTEND=noninteractive
 
 SHELL ["/bin/bash", "-euxo", "pipefail", "-c"]
@@ -496,8 +489,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
       "tokenspeed-mla==0.1.2" \
       "transformers>=5.5.1" \
       "apache-tvm-ffi==0.1.9" \
-      "fastsafetensors==0.2.2" \
- && (/opt/venv/bin/python -m pip cache purge || true)
+      "fastsafetensors==0.2.2"
 
 ENV VIRTUAL_ENV=/opt/venv \
     PATH="/opt/venv/bin:${PATH}" \
@@ -546,6 +538,14 @@ PY
 WORKDIR /
 
 CMD ["/usr/local/bin/run-kimi26-vllm"]
+
+ARG VLLM_REPO
+ARG VLLM_REF
+ARG VLLM_COMMIT
+ARG B12X_REF
+ARG B12X_COMMIT
+ARG FLASHINFER_REF
+ARG FLASHINFER_COMMIT
 
 LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM GLM/Kimi image with PyTorch 2.12 cu132, patched NCCL 2.30.4, FlashInfer git, B12X and canonical vLLM branch" \
       local-inference.cuda.version="13.2.1" \
