@@ -27,6 +27,8 @@ LAUNCHER_REF="${LAUNCHER_REF:-${VLLM_REF}}"
 CUTLASS_REPO="${CUTLASS_REPO:-https://github.com/NVIDIA/cutlass.git}"
 CUTLASS_REF="${CUTLASS_REF:-main}"
 VLLM_BUILD_VERSION="${VLLM_BUILD_VERSION:-0.11.2.dev279+black.benediction.b12x.cu132}"
+TRITON_KERNELS_REPO="${TRITON_KERNELS_REPO:-https://github.com/triton-lang/triton.git}"
+TRITON_KERNELS_REF="${TRITON_KERNELS_REF:-}"
 
 resolve_ref() {
   local repo="$1"
@@ -60,6 +62,11 @@ if [[ "${PIN_SOURCE_COMMITS}" == "1" ]]; then
   VLLM_COMMIT="${VLLM_COMMIT:-$(resolve_ref "${VLLM_REPO}" "${VLLM_REF}")}"
   LAUNCHER_COMMIT="${LAUNCHER_COMMIT:-$(resolve_ref "${LAUNCHER_REPO}" "${LAUNCHER_REF}")}"
   CUTLASS_COMMIT="${CUTLASS_COMMIT:-$(resolve_ref "${CUTLASS_REPO}" "${CUTLASS_REF}")}"
+  if [[ -n "${TRITON_KERNELS_REF}" ]]; then
+    TRITON_KERNELS_COMMIT="${TRITON_KERNELS_COMMIT:-$(resolve_ref "${TRITON_KERNELS_REPO}" "${TRITON_KERNELS_REF}")}"
+  else
+    TRITON_KERNELS_COMMIT="${TRITON_KERNELS_COMMIT:-}"
+  fi
 else
   NCCL_COMMIT="${NCCL_COMMIT:-}"
   FLASHINFER_COMMIT="${FLASHINFER_COMMIT:-}"
@@ -68,6 +75,7 @@ else
   VLLM_COMMIT="${VLLM_COMMIT:-}"
   LAUNCHER_COMMIT="${LAUNCHER_COMMIT:-}"
   CUTLASS_COMMIT="${CUTLASS_COMMIT:-}"
+  TRITON_KERNELS_COMMIT="${TRITON_KERNELS_COMMIT:-}"
 fi
 
 echo "Building ${IMAGE}"
@@ -85,6 +93,7 @@ echo "  B12X_REF=${B12X_REF} ${B12X_COMMIT}"
 echo "  VLLM_REF=${VLLM_REF} ${VLLM_COMMIT}"
 echo "  LAUNCHER_REF=${LAUNCHER_REF} ${LAUNCHER_COMMIT}"
 echo "  CUTLASS_REF=${CUTLASS_REF} ${CUTLASS_COMMIT}"
+echo "  TRITON_KERNELS_REF=${TRITON_KERNELS_REF} ${TRITON_KERNELS_COMMIT}"
 echo "  NCCL_REF=${NCCL_REF} ${NCCL_COMMIT}"
 
 if [[ "${BUILD_BASE_IMAGE}" == "1" ]]; then
@@ -143,6 +152,9 @@ DOCKER_BUILDKIT=1 docker build \
   --build-arg CUTLASS_REPO="${CUTLASS_REPO}" \
   --build-arg CUTLASS_REF="${CUTLASS_REF}" \
   --build-arg CUTLASS_COMMIT="${CUTLASS_COMMIT}" \
+  --build-arg TRITON_KERNELS_REPO="${TRITON_KERNELS_REPO}" \
+  --build-arg TRITON_KERNELS_REF="${TRITON_KERNELS_REF}" \
+  --build-arg TRITON_KERNELS_COMMIT="${TRITON_KERNELS_COMMIT}" \
   --progress=plain \
   -f Dockerfile.vllm-b12x-cu132 \
   -t "${IMAGE}" \

@@ -24,7 +24,6 @@ services:
       - SGLANG_ENABLE_SPEC_V2=True
       - SGLANG_ENABLE_JIT_DEEPGEMM=0
       - SGLANG_ENABLE_DEEP_GEMM=0
-      - NCCL_GRAPH_FILE=/etc/nccl_graph_opt.xml
       - NCCL_IB_DISABLE=1
       - NCCL_P2P_LEVEL=SYS
       - NCCL_ALLOC_P2P_NET_LL_BUFFERS=1

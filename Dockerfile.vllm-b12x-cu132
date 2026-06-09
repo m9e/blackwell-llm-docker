@@ -55,6 +55,10 @@ ARG CUTLASS_REPO=https://github.com/NVIDIA/cutlass.git
 ARG CUTLASS_REF=main
 ARG CUTLASS_COMMIT=982cb9e718bcd4d7ac546b1795702a08326dfe4b
 
+ARG TRITON_KERNELS_REPO=https://github.com/triton-lang/triton.git
+ARG TRITON_KERNELS_REF=
+ARG TRITON_KERNELS_COMMIT=
+
 ARG MAX_JOBS=128
 ARG NVCC_THREADS=1
 ARG VLLM_MAX_JOBS=128
@@ -187,8 +191,7 @@ COPY --from=nccl-build /build/nccl/build/lib/${NCCL_SONAME} /opt/libnccl-local-i
 
 ENV NCCL_LOCAL_INFERENCE_PATH=/opt/libnccl-local-inference.so.2.30.4 \
     NCCL_PR2127_PATH=/opt/libnccl-local-inference.so.2.30.4 \
-    VLLM_NCCL_SO_PATH=/opt/libnccl-local-inference.so.2.30.4 \
-    NCCL_GRAPH_FILE=""
+    VLLM_NCCL_SO_PATH=/opt/libnccl-local-inference.so.2.30.4
 
 LABEL org.opencontainers.image.description="Reusable CUDA 13.2.1 vLLM+B12X system base with latest CUDA 13.2-compatible cuBLAS/cuDNN overlays and patched NCCL 2.30.4" \
       local-inference.cuda.version="13.2.1" \
@@ -404,6 +407,9 @@ ARG LAUNCHER_REF
 ARG LAUNCHER_COMMIT
 ARG VLLM_MAX_JOBS
 ARG VLLM_NVCC_THREADS
+ARG TRITON_KERNELS_REPO
+ARG TRITON_KERNELS_REF
+ARG TRITON_KERNELS_COMMIT
 
 WORKDIR /build
 
@@ -419,15 +425,32 @@ RUN git clone --recursive --filter=blob:none "${VLLM_REPO}" /opt/vllm \
 
 WORKDIR /opt/vllm
 
+RUN if [[ -f use_existing_torch.py ]]; then python use_existing_torch.py; fi
+
+RUN if [[ -n "${TRITON_KERNELS_REF}" ]]; then \
+      git clone --filter=blob:none "${TRITON_KERNELS_REPO}" /build/triton; \
+      cd /build/triton; \
+      git checkout "${TRITON_KERNELS_REF}"; \
+      if [[ -n "${TRITON_KERNELS_COMMIT}" ]]; then test "$(git rev-parse HEAD)" = "${TRITON_KERNELS_COMMIT}"; fi; \
+      test -d /build/triton/python/triton_kernels/triton_kernels; \
+    fi
+
 RUN --mount=type=cache,target=/root/.ccache \
-    VLLM_VERSION_OVERRIDE="${VLLM_BUILD_VERSION}" \
-    VLLM_TARGET_DEVICE=cuda \
-    VLLM_USE_PRECOMPILED=0 \
-    VLLM_CUTLASS_SRC_DIR=/build/cutlass \
-    MAX_JOBS="${VLLM_MAX_JOBS}" \
-    CMAKE_BUILD_PARALLEL_LEVEL="${VLLM_MAX_JOBS}" \
-    NVCC_THREADS="${VLLM_NVCC_THREADS}" \
+    export VLLM_VERSION_OVERRIDE="${VLLM_BUILD_VERSION}"; \
+    export VLLM_TARGET_DEVICE=cuda; \
+    export VLLM_USE_PRECOMPILED=0; \
+    export VLLM_CUTLASS_SRC_DIR=/build/cutlass; \
+    export MAX_JOBS="${VLLM_MAX_JOBS}"; \
+    export CMAKE_BUILD_PARALLEL_LEVEL="${VLLM_MAX_JOBS}"; \
+    export NVCC_THREADS="${VLLM_NVCC_THREADS}"; \
+    if [[ -n "${TRITON_KERNELS_REF}" ]]; then \
+      export TRITON_KERNELS_SRC_DIR=/build/triton/python/triton_kernels/triton_kernels; \
+    fi; \
     python -m pip install --no-build-isolation --no-deps --force-reinstall . \
+ && site_packages="$(python -c 'import site; print(site.getsitepackages()[0])')" \
+ && if [[ -d "${site_packages}/vllm/third_party/triton_kernels" && ! -e "${site_packages}/triton_kernels" ]]; then \
+      ln -s vllm/third_party/triton_kernels "${site_packages}/triton_kernels"; \
+    fi \
  && for so in \
       /opt/venv/lib/python3.12/site-packages/vllm/_C.abi3.so \
       /opt/venv/lib/python3.12/site-packages/vllm/_C_stable_libtorch.abi3.so \
@@ -437,10 +460,12 @@ RUN --mount=type=cache,target=/root/.ccache \
       fi; \
     done \
  && python - <<'PY'
+import importlib
 import torch, flashinfer, vllm
 print("torch", torch.__version__, torch.version.cuda)
 print("flashinfer", getattr(flashinfer, "__version__", "unknown"))
 print("vllm", getattr(vllm, "__version__", "unknown"))
+importlib.import_module("vllm.third_party.triton_kernels.matmul_ogs")
 PY
 
 RUN launcher_root=/opt/vllm \
@@ -648,6 +673,8 @@ ARG FLASHINFER_REF
 ARG FLASHINFER_COMMIT
 ARG DEEPGEMM_REF
 ARG DEEPGEMM_COMMIT
+ARG TRITON_KERNELS_REF
+ARG TRITON_KERNELS_COMMIT
 ARG CUBLAS_CUDA13_VERSION
 ARG CUDNN_CUDA13_VERSION
 ARG CUDA_COMPAT_13_2_VERSION
@@ -670,4 +697,6 @@ LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM+B12X image wi
       local-inference.flashinfer.branch="${FLASHINFER_REF}" \
       local-inference.flashinfer.commit="${FLASHINFER_COMMIT}" \
       local-inference.deepgemm.branch="${DEEPGEMM_REF}" \
-      local-inference.deepgemm.commit="${DEEPGEMM_COMMIT}"
+      local-inference.deepgemm.commit="${DEEPGEMM_COMMIT}" \
+      local-inference.triton_kernels.branch="${TRITON_KERNELS_REF}" \
+      local-inference.triton_kernels.commit="${TRITON_KERNELS_COMMIT}"

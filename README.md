@@ -10,6 +10,7 @@ Docker images for LLM inference on NVIDIA Blackwell GPUs (SM120).
 | `voipmonitor/sglang:cu132` | `Dockerfile.sglang-cu132` | CUDA 13.2, torch 2.12 from source, FlashInfer source (PR #2913), SGLang + b12x |
 | `voipmonitor/vllm:cu130` | `Dockerfile.vllm-cu130` | CUDA 13.0, torch 2.11 stable cu130, FlashInfer source (PR #2913), vLLM + cherry-picks |
 | `voipmonitor/vllm:vllm-b12x-cu132` | `Dockerfile.vllm-b12x-cu132` | Clean CUDA 13.2.1, PyTorch 2.12 cu132 wheels, patched NCCL 2.30.4, FlashInfer, DeepGEMM, B12X, vLLM |
+| `voipmonitor/vllm:lucifer` | `Dockerfile.vllm-b12x-cu132` | Lucifer DS4 Flash/CUTLASS vLLM branch on the same CUDA 13.2.1 base, FlashInfer, DeepGEMM, and Triton kernels source hook |
 
 Base image for cu132 (torch + FlashInfer compiled from source):
 
@@ -82,6 +83,9 @@ IMAGE=voipmonitor/vllm:vllm-b12x-cu132 ./build-vllm-b12x-cu132.sh
 
 # Reproduce the pushed black-benediction PR11 image exactly.
 ./build-black-benediction-b12xpr11-cu132.sh
+
+# Build the Lucifer DS4 Flash/CUTLASS image from local-inference-lab/vllm:lucifer.
+./build-lucifer-cu132.sh
 ```
 
 ### Current vLLM+B12X CUDA 13.2 base image
@@ -117,6 +121,13 @@ PUSH_BASE_IMAGE=1 \
 
 # Exact black-benediction PR11 image from 2026-06-08.
 ./build-black-benediction-b12xpr11-cu132.sh
+
+# Lucifer DS4 Flash/CUTLASS image. This reuses the same cu132 system/build bases
+# and builds vLLM from local-inference-lab/vllm branch `lucifer`, which contains
+# the rebased Lucifer SM120 sparse MLA patch and CUTLASS MoE fix from
+# procr1337/llm-bench. It also enables the Triton kernels source hook used by
+# that stack.
+./build-lucifer-cu132.sh
 ```
 
 Useful sanity check after the build:
