@@ -459,13 +459,15 @@ RUN --mount=type=cache,target=/root/.ccache \
         patchelf --add-needed libcuda.so.1 "${so}"; \
       fi; \
     done \
- && python - <<'PY'
+ && TRITON_KERNELS_REF="${TRITON_KERNELS_REF}" python - <<'PY'
 import importlib
+import os
 import torch, flashinfer, vllm
 print("torch", torch.__version__, torch.version.cuda)
 print("flashinfer", getattr(flashinfer, "__version__", "unknown"))
 print("vllm", getattr(vllm, "__version__", "unknown"))
-importlib.import_module("vllm.third_party.triton_kernels.matmul_ogs")
+if os.environ.get("TRITON_KERNELS_REF"):
+    importlib.import_module("vllm.third_party.triton_kernels.matmul_ogs")
 PY
 
 RUN launcher_root=/opt/vllm \
