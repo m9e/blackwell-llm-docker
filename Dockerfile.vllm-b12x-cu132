@@ -47,6 +47,8 @@ ARG VLLM_REPO=https://github.com/local-inference-lab/vllm.git
 ARG VLLM_REF=dev/black-benediction
 ARG VLLM_COMMIT=
 ARG VLLM_BUILD_VERSION=0.11.2.dev279+black.benediction.b12x.cu132
+ARG VLLM_PATCH_URL=
+ARG VLLM_PATCH_SHA256=
 ARG LAUNCHER_REPO=https://github.com/local-inference-lab/vllm.git
 ARG LAUNCHER_REF=dev/black-benediction
 ARG LAUNCHER_COMMIT=
@@ -420,6 +422,8 @@ FROM b12x-build AS vllm-build
 ARG VLLM_REPO
 ARG VLLM_REF
 ARG VLLM_COMMIT
+ARG VLLM_PATCH_URL
+ARG VLLM_PATCH_SHA256
 ARG VLLM_BUILD_VERSION
 ARG LAUNCHER_REPO
 ARG LAUNCHER_REF
@@ -436,6 +440,14 @@ RUN git clone --recursive --filter=blob:none "${VLLM_REPO}" /opt/vllm \
  && cd /opt/vllm \
  && git checkout "${VLLM_REF}" \
  && if [[ -n "${VLLM_COMMIT}" ]]; then test "$(git rev-parse HEAD)" = "${VLLM_COMMIT}"; fi \
+ && if [[ -n "${VLLM_PATCH_URL}" ]]; then \
+      curl -fsSL "${VLLM_PATCH_URL}" -o /tmp/vllm-extra.patch; \
+      if [[ -n "${VLLM_PATCH_SHA256}" ]]; then \
+        echo "${VLLM_PATCH_SHA256}  /tmp/vllm-extra.patch" | sha256sum -c -; \
+      fi; \
+      git apply --verbose /tmp/vllm-extra.patch; \
+      git diff --check; \
+    fi \
  && grep -v '^torch==' requirements/build/cuda.txt > /tmp/vllm-build-notorch.txt \
  && python -m pip install -r /tmp/vllm-build-notorch.txt \
  && python -m pip install -r requirements/common.txt \
@@ -716,6 +728,8 @@ CMD ["/usr/local/bin/run-kimi26-vllm"]
 ARG VLLM_REPO
 ARG VLLM_REF
 ARG VLLM_COMMIT
+ARG VLLM_PATCH_URL
+ARG VLLM_PATCH_SHA256
 ARG B12X_REF
 ARG B12X_COMMIT
 ARG FLASHINFER_REF
@@ -740,6 +754,8 @@ LABEL org.opencontainers.image.description="Clean CUDA 13.2.1 vLLM+B12X image wi
       local-inference.vllm.repo="${VLLM_REPO}" \
       local-inference.vllm.branch="${VLLM_REF}" \
       local-inference.vllm.commit="${VLLM_COMMIT}" \
+      local-inference.vllm.patch_url="${VLLM_PATCH_URL}" \
+      local-inference.vllm.patch_sha256="${VLLM_PATCH_SHA256}" \
       local-inference.b12x.branch="${B12X_REF}" \
       local-inference.b12x.commit="${B12X_COMMIT}" \
       local-inference.b12x.runtime_version="source" \
