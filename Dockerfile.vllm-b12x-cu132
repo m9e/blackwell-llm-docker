@@ -453,7 +453,7 @@ RUN git clone --recursive --filter=blob:none "${VLLM_REPO}" /opt/vllm \
  && python -m pip install -r requirements/common.txt \
  && python -m pip install "fastapi[standard]>=0.115.0,<0.137" \
  && python -m pip install setuptools_scm "setuptools-rust>=1.9.0" \
- && python -m pip check || true
+ && (python -m pip check || true)
 
 WORKDIR /opt/vllm
 
@@ -492,6 +492,7 @@ RUN --mount=type=cache,target=/root/.ccache \
     if [[ -n "${TRITON_KERNELS_REF}" ]]; then \
       export TRITON_KERNELS_SRC_DIR=/build/triton/python/triton_kernels/triton_kernels; \
     fi; \
+    python -m pip install setuptools_scm "setuptools-rust>=1.9.0"; \
     python -m pip install --no-build-isolation --no-deps --force-reinstall . \
  && python tools/build_rust.py --release \
  && test -f vllm/_rust_tool_parser.abi3.so \
