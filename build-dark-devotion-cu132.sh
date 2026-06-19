@@ -36,7 +36,7 @@ export FLASHINFER_COMMIT="${FLASHINFER_COMMIT:-9c5ed7c194e7412780862491742fc655d
 
 export DEEPGEMM_REPO="${DEEPGEMM_REPO:-https://github.com/deepseek-ai/DeepGEMM.git}"
 export DEEPGEMM_REF="${DEEPGEMM_REF:-refs/pull/324/head}"
-export DEEPGEMM_COMMIT="${DEEPGEMM_COMMIT:-33a715e3d9634b64a351855c74ad64e2d9359c7e}"
+export DEEPGEMM_COMMIT="${DEEPGEMM_COMMIT:-9ca30487a6d1a484757f2d87f532c5f6707b9f25}"
 
 export B12X_REPO="${B12X_REPO:-https://github.com/lukealonso/b12x.git}"
 export B12X_REF="${B12X_REF:-master}"
@@ -57,4 +57,20 @@ export CUTLASS_REPO="${CUTLASS_REPO:-https://github.com/NVIDIA/cutlass.git}"
 export CUTLASS_REF="${CUTLASS_REF:-d80a4e53b52b42550659a8696dab32705265e324}"
 export CUTLASS_COMMIT="${CUTLASS_COMMIT:-d80a4e53b52b42550659a8696dab32705265e324}"
 
-exec ./build-vllm-b12x-cu132.sh "$@"
+FLASHINFER_WHEEL_DIR=".tmp-flashinfer-wheels"
+FLASHINFER_WHEEL_STASH=".tmp-flashinfer-wheels.disabled-dark-devotion"
+if [[ "${FORCE_FLASHINFER_SOURCE:-1}" == "1" ]] \
+  && compgen -G "${FLASHINFER_WHEEL_DIR}/flashinfer_*.whl" >/dev/null; then
+  rm -rf "${FLASHINFER_WHEEL_STASH}"
+  mkdir -p "${FLASHINFER_WHEEL_STASH}"
+  mv "${FLASHINFER_WHEEL_DIR}"/flashinfer_*.whl "${FLASHINFER_WHEEL_STASH}"/
+  restore_flashinfer_wheels() {
+    if compgen -G "${FLASHINFER_WHEEL_STASH}/flashinfer_*.whl" >/dev/null; then
+      mv "${FLASHINFER_WHEEL_STASH}"/flashinfer_*.whl "${FLASHINFER_WHEEL_DIR}"/
+    fi
+    rmdir "${FLASHINFER_WHEEL_STASH}" 2>/dev/null || true
+  }
+  trap restore_flashinfer_wheels EXIT
+fi
+
+./build-vllm-b12x-cu132.sh "$@"
