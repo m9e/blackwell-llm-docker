@@ -287,6 +287,7 @@ FROM base AS flashinfer-build
 ARG FLASHINFER_REPO
 ARG FLASHINFER_REF
 ARG FLASHINFER_COMMIT
+ARG FLASHINFER_BUILD_CUBIN=1
 ARG CUTLASS_REPO
 ARG CUTLASS_REF
 ARG CUTLASS_COMMIT
@@ -328,10 +329,11 @@ RUN --mount=type=cache,target=/root/.ccache \
     if compgen -G "/tmp/prebuilt-flashinfer-wheels/flashinfer_python-*.whl" >/dev/null; then \
       ls -lh /tmp/prebuilt-flashinfer-wheels; \
       (python -m pip uninstall -y flashinfer-python flashinfer-cubin flashinfer-jit-cache || true); \
-      python -m pip install --no-deps --force-reinstall \
-        /tmp/prebuilt-flashinfer-wheels/flashinfer_python-*.whl \
+      shopt -s nullglob; \
+      wheels=(/tmp/prebuilt-flashinfer-wheels/flashinfer_python-*.whl \
         /tmp/prebuilt-flashinfer-wheels/flashinfer_cubin-*.whl \
-        /tmp/prebuilt-flashinfer-wheels/flashinfer_jit_cache-*.whl; \
+        /tmp/prebuilt-flashinfer-wheels/flashinfer_jit_cache-*.whl); \
+      python -m pip install --no-deps --force-reinstall "${wheels[@]}"; \
     else \
       git clone --recursive "${FLASHINFER_REPO}" /tmp/flashinfer-src; \
       cd /tmp/flashinfer-src; \
@@ -351,10 +353,13 @@ RUN --mount=type=cache,target=/root/.ccache \
         FLASHINFER_ENABLE_SM90=0 \
         MAX_JOBS="${MAX_JOBS}" \
         python -m pip install --no-build-isolation --no-deps -v .; \
-      FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST}" \
+      if [[ "${FLASHINFER_BUILD_CUBIN}" == "1" ]] && FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST}" \
         MAX_JOBS="${MAX_JOBS}" \
-        python -m pip wheel --no-build-isolation --no-deps -w /tmp/flashinfer-wheels ./flashinfer-cubin; \
-      python -m pip install --no-deps --force-reinstall /tmp/flashinfer-wheels/flashinfer_cubin-*.whl; \
+        python -m pip wheel --no-build-isolation --no-deps -w /tmp/flashinfer-wheels ./flashinfer-cubin; then \
+        python -m pip install --no-deps --force-reinstall /tmp/flashinfer-wheels/flashinfer_cubin-*.whl; \
+      else \
+        echo "WARNING: flashinfer-cubin wheel build skipped or failed; continuing with flashinfer-python + flashinfer-jit-cache"; \
+      fi; \
       FLASHINFER_CUDA_ARCH_LIST="${FLASHINFER_CUDA_ARCH_LIST}" \
         MAX_JOBS="${MAX_JOBS}" \
         python -m pip wheel --no-build-isolation --no-deps -w /tmp/flashinfer-wheels ./flashinfer-jit-cache; \
@@ -451,14 +456,24 @@ RUN git clone --recursive --filter=blob:none "${VLLM_REPO}" /opt/vllm \
     fi \
  && python - <<'PY'
 import re
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
 path = "requirements/cuda.txt"
 text = open(path, encoding="utf-8").read()
-versions = {
-    "flashinfer-python": version("flashinfer-python"),
-    "flashinfer-cubin": version("flashinfer-cubin"),
-}
+versions = {}
+for package in ("flashinfer-python", "flashinfer-cubin"):
+    try:
+        versions[package] = version(package)
+    except PackageNotFoundError:
+        text, count = re.subn(
+            rf"^{re.escape(package)}==.*\n?",
+            "",
+            text,
+            flags=re.MULTILINE,
+        )
+        if count:
+            print(f"removed absent {package} pin from {path}")
+        continue
 for package, package_version in versions.items():
     text, count = re.subn(
         rf"^{re.escape(package)}==.*$",
