@@ -35,17 +35,15 @@ host networking and host IPC
 
 The OS also matters. I disabled irrelevant headless-node services like cups, avahi, bluetooth, ModemManager, colord, fwupd, packagekit, desktop portal/pipewire pieces, etc. Important: this disables the desktop GUI; only do this on headless inference nodes. On Spark unified memory, a few GB of random Linux/userland overhead can be the difference between fitting and failing.
 
-Some measured numbers:
+Some measured numbers, split the way they should be read:
 
 ```text
-Short codegen, MTP1: about 14.5-15.2 tok/s
-16K summary e2e:     about 4.7 tok/s
-32K summary e2e:     about 3.0 tok/s
-64K summary e2e:     about 1.7 tok/s
-112K summary e2e:    about 1.0 tok/s
+Short codegen decode, MTP1: about 14.5-15.2 tok/s
+Long-prompt prefill:         about 450-500 input tok/s in the 16K-112K tests
+Post-TTFT decode:            about 13 tok/s at 32K-112K prompt sizes
 ```
 
-The long-summary e2e numbers are mostly prefill. In a TTFT run, post-first-token decode stayed around 13 tok/s even at 64K/112K prompt sizes.
+The summary wall-clock rates look much lower only if prefill/TTFT is blended into generation time. I would not quote those as decode throughput.
 
 Important caveat on batching: the 128K profile is `MAX_NUM_SEQS=1`. I tested 8 simultaneous unique codegen prompts and it queued rather than true-batched:
 

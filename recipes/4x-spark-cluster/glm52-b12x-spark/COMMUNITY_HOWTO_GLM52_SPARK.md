@@ -288,27 +288,26 @@ Short-prompt codegen with MTP1 typically lands around:
 14.5-15.2 completion tok/s
 ```
 
-Full shape matrix, end-to-end speed:
+Performance should be read as prefill plus decode:
 
 ```text
-MTP1 0K codegen:       13.416, 14.685, 15.087 tok/s
-MTP1 16K summary:      4.731 tok/s e2e
-MTP1 32K summary:      3.015 tok/s e2e
-MTP1 64K summary:      1.673 tok/s e2e
-MTP1 112K summary:     1.035 tok/s e2e
-MTP1 12.5K translate:  14.489 tok/s
-MTP1 25K translate:    14.408 tok/s
-MTP1 50K translate:    14.492 tok/s
+Short codegen decode:   about 14.5-15.2 tok/s
+12.5K translate decode: 14.489 tok/s
+25K translate decode:   14.408 tok/s
+50K translate decode:   14.492 tok/s
 ```
 
-The summary numbers are dominated by prefill. A separate TTFT run showed decode-after-first-token remains much higher:
+For long summary prompts, TTFT/prefill dominates wall time, but decode after TTFT remains much higher than the blended wall-clock number:
 
 ```text
-16K summary:  TTFT 35.476 s, post-TTFT decode 10.866 tok/s, e2e 4.336 tok/s
-32K summary:  TTFT 64.165 s, post-TTFT decode 13.430 tok/s
-64K summary:  TTFT 129.503 s, post-TTFT decode 13.316 tok/s
-112K summary: TTFT 222.568 s, post-TTFT decode 13.310 tok/s
+Prompt size  TTFT / prefill     Approx prefill rate    Decode after TTFT
+16K          35.476 s           about 450 tok/s        10.866 tok/s
+32K          64.165 s           about 500 tok/s        13.430 tok/s
+64K          129.503 s          about 494 tok/s        13.316 tok/s
+112K         222.568 s          about 503 tok/s        13.310 tok/s
 ```
+
+The older blended wall-clock summary rates were about 4.7, 3.0, 1.7, and 1.0 tok/s at 16K, 32K, 64K, and 112K respectively. Those are end-to-end user-wait rates for short summaries, not decode rates.
 
 A bs=8 test with eight unique codegen prompts did not true-batch because production uses `MAX_NUM_SEQS=1`:
 

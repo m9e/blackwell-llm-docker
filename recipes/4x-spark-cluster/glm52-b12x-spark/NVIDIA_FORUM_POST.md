@@ -79,15 +79,12 @@ Maximum concurrency for 131,072 tokens per request: 1.01x
 Performance notes:
 
 ```text
-Short codegen:         about 14.5-15.2 tok/s
-16K summary e2e:       about 4.7 tok/s
-32K summary e2e:       about 3.0 tok/s
-64K summary e2e:       about 1.7 tok/s
-112K summary e2e:      about 1.0 tok/s
-Post-TTFT decode:      about 13 tok/s at long prompt sizes
+Short codegen decode:  about 14.5-15.2 tok/s
+Long-prompt prefill:   about 450-500 input tok/s in the 16K-112K tests
+Post-TTFT decode:      about 13 tok/s at 32K-112K prompt sizes
 ```
 
-The long-context e2e results are prefill-dominated. Decode after first token remains much closer to short-context speed.
+The long-context summary wall-clock results are prefill-dominated. Decode after first token remains much closer to short-context speed, so do not quote blended summary wall-clock rates as decode throughput.
 
 A batch note: this 128K profile uses `MAX_NUM_SEQS=1`. An 8-concurrent-prompt test queued rather than true-batched and produced about 14.8 aggregate tok/s. That is expected and not a batch-throughput profile.
 

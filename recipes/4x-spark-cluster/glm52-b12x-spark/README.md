@@ -171,16 +171,19 @@ That is expected. To optimize bs=8, use a separate lower-context profile with la
 
 ## Long-prompt behavior
 
-End-to-end throughput on summary tasks drops mostly because prefill dominates time-to-first-token. Decode after the first token remains roughly in the same band.
+Frame long-prompt performance as prefill plus decode, not as one blended end-to-end number. The summary tests look slow only if TTFT/prefill is averaged together with generation. After the first token, decode stayed in the same broad band as short-prompt decode.
 
 MTP1 TTFT diagnostic:
 
 ```text
-16K prompt:  TTFT 35.476 s, post-TTFT decode 10.866 tok/s, e2e 4.336 tok/s
-32K prompt:  TTFT 64.165 s, post-TTFT decode 13.430 tok/s
-64K prompt:  TTFT 129.503 s, post-TTFT decode 13.316 tok/s
-112K prompt: TTFT 222.568 s, post-TTFT decode 13.310 tok/s
+Prompt size  TTFT / prefill     Approx prefill rate    Decode after TTFT
+16K          35.476 s           about 450 tok/s        10.866 tok/s
+32K          64.165 s           about 500 tok/s        13.430 tok/s
+64K          129.503 s          about 494 tok/s        13.316 tok/s
+112K         222.568 s          about 503 tok/s        13.310 tok/s
 ```
+
+The old blended summary numbers are useful only for wall-clock planning, not as decode throughput.
 
 ## Known caveats
 
