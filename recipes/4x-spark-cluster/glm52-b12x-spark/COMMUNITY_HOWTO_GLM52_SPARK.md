@@ -301,13 +301,13 @@ For long summary prompts, TTFT/prefill dominates wall time, but decode after TTF
 
 ```text
 Prompt size  TTFT / prefill     Approx prefill rate    Decode after TTFT
-16K          35.476 s           about 450 tok/s        10.866 tok/s
+16K          35.476 s           about 450 tok/s        10.866 tok/s likely cold/warmup affected
 32K          64.165 s           about 500 tok/s        13.430 tok/s
 64K          129.503 s          about 494 tok/s        13.316 tok/s
 112K         222.568 s          about 503 tok/s        13.310 tok/s
 ```
 
-The older blended wall-clock summary rates were about 4.7, 3.0, 1.7, and 1.0 tok/s at 16K, 32K, 64K, and 112K respectively. Those are end-to-end user-wait rates for short summaries, not decode rates.
+The 16K decode row is probably cold-start or warmup noise. The steadier 32K-112K rows are a better read on long-context post-TTFT decode. The older blended wall-clock summary rates were about 4.7, 3.0, 1.7, and 1.0 tok/s at 16K, 32K, 64K, and 112K respectively. Those are end-to-end user-wait rates for short summaries, not decode rates.
 
 This is a single-long-context profile, not a batch-serving profile. It uses `MAX_NUM_SEQS=1`, so concurrent requests queue. To make a batch-serving variant, raise `MAX_NUM_SEQS` and re-fit the KV budget, usually by lowering `MAX_MODEL_LEN` or accepting less 128K headroom. That tradeoff is intentionally left to the reader.
 

@@ -81,7 +81,7 @@ Performance notes:
 ```text
 Short codegen decode:  about 14.5-15.2 tok/s
 Long-prompt prefill:   about 450-500 input tok/s in the 16K-112K tests
-Post-TTFT decode:      about 13 tok/s at 32K-112K prompt sizes
+Post-TTFT decode:      about 13 tok/s at 32K-112K prompt sizes; the slower 16K row looked cold/warmup affected
 ```
 
 The long-context summary wall-clock results are prefill-dominated. Decode after first token remains much closer to short-context speed, so do not quote blended summary wall-clock rates as decode throughput.

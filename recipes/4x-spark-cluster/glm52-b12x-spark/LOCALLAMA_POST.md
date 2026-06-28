@@ -40,7 +40,7 @@ Some measured numbers, split the way they should be read:
 ```text
 Short codegen decode, MTP1: about 14.5-15.2 tok/s
 Long-prompt prefill:         about 450-500 input tok/s in the 16K-112K tests
-Post-TTFT decode:            about 13 tok/s at 32K-112K prompt sizes
+Post-TTFT decode:            about 13 tok/s at 32K-112K prompt sizes; the slower 16K row looked cold/warmup affected
 ```
 
 The summary wall-clock rates look much lower only if prefill/TTFT is blended into generation time. I would not quote those as decode throughput.

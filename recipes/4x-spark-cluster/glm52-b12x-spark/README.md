@@ -166,13 +166,13 @@ MTP1 TTFT diagnostic:
 
 ```text
 Prompt size  TTFT / prefill     Approx prefill rate    Decode after TTFT
-16K          35.476 s           about 450 tok/s        10.866 tok/s
+16K          35.476 s           about 450 tok/s        10.866 tok/s likely cold/warmup affected
 32K          64.165 s           about 500 tok/s        13.430 tok/s
 64K          129.503 s          about 494 tok/s        13.316 tok/s
 112K         222.568 s          about 503 tok/s        13.310 tok/s
 ```
 
-The old blended summary numbers are useful only for wall-clock planning, not as decode throughput.
+The 16K decode row is probably cold-start or warmup noise. The steadier 32K-112K rows are a better read on long-context post-TTFT decode. The old blended summary numbers are useful only for wall-clock planning, not as decode throughput.
 
 ## Known caveats
 
