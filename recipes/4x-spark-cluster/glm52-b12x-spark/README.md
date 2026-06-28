@@ -18,15 +18,15 @@ Batch:    max_num_seqs=1 production profile; bs=8 queues and stays about 14.8 ag
 The current live/tested environment file is:
 
 ```bash
-ENV_FILE=/home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark/glm52-dcp4-mtp1-128k.env \
+ENV_FILE=recipes/4x-spark-cluster/glm52-b12x-spark/glm52-dcp4-mtp1-128k.env \
 PATCH_DIAGNOSTICS=1 \
-/home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark/launch-glm52-mtp3-dcp4-128k.sh
+recipes/4x-spark-cluster/glm52-b12x-spark/launch-glm52-mtp3-dcp4-128k.sh
 ```
 
 There is also a cleaner frozen baseline from the first production point:
 
 ```bash
-/home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark/launch-glm52-mtp1-dcp4-128k.sh
+recipes/4x-spark-cluster/glm52-b12x-spark/launch-glm52-mtp1-dcp4-128k.sh
 ```
 
 That older wrapper uses `glm52-mtp1-dcp4-128k.env` and image `glm-darkdevotion-b12x:20260625-arm64-mtp1-trim`. The newer live profile uses image `glm-darkdevotion-b12x:20260626-arm64-mtpdiag21-draftprob` and keeps extra diagnostics available. Both are the same serving shape: DCP4, 128K, MTP1.
@@ -58,14 +58,14 @@ SOULKILLER_MEMORY_PRUNE_20260627.md   memory-pruning checklist for Spark nodes
 2. Start the Ray cluster inside the vLLM container.
 
 ```bash
-cd /home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark
+cd recipes/4x-spark-cluster/glm52-b12x-spark
 ./launch-ray.sh
 ```
 
 3. Start the current 128K/MTP1 serving profile.
 
 ```bash
-cd /home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark
+cd recipes/4x-spark-cluster/glm52-b12x-spark
 ENV_FILE=$PWD/glm52-dcp4-mtp1-128k.env PATCH_DIAGNOSTICS=1 ./launch-glm52-mtp3-dcp4-128k.sh
 ```
 

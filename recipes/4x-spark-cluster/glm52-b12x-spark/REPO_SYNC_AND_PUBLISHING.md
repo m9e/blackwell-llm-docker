@@ -7,7 +7,7 @@ Date: 2026-06-27
 Local path:
 
 ```text
-/home/matt/code/blackwell-llm-docker
+code/blackwell-llm-docker
 ```
 
 Upstream remote:
@@ -46,7 +46,7 @@ __pycache__/
 Local path:
 
 ```text
-/home/matt/code/vllm-dark-devotion
+<path-to-your-vllm-fork>
 ```
 
 Upstream remote:
@@ -84,9 +84,9 @@ The public branch should be pushed to the `m9e/vllm` fork after committing.
 ## Other repos checked
 
 ```text
-/home/matt/code/glm-5.2-sm120
-/home/matt/code/sonusflow-spark-vllm-docker
-/home/matt/code/spark-vllm-docker
+code/glm-5.2-sm120
+code/sonusflow-spark-vllm-docker
+code/spark-vllm-docker
 ```
 
 `glm-5.2-sm120` and `sonusflow-spark-vllm-docker` were clean and up to date after fetch.

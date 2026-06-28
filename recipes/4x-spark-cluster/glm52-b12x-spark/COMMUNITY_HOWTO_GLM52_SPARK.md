@@ -92,6 +92,22 @@ glm-darkdevotion-b12x:20260625-arm64-mtp1-trim
 
 Both are DCP4/MTP1/128K capable. The later image keeps diagnostic code paths available for MTP/DCP work.
 
+This is a containerized Ray/vLLM deployment. Ray is not started on the host OS. `launch-ray.sh` starts one Docker container per Spark and runs `ray start` inside those containers.
+
+Do not assume a stock NGC vLLM image is sufficient. Some newer NVIDIA vLLM containers dropped Ray, while this recipe requires the Ray CLI and Python package inside the serving image because vLLM is launched with the Ray distributed executor. If you rebuild from a stock image, install a vLLM-compatible Ray package into the image before using this launcher. The lightweight path is the base `ray` package, not `ray[default]`, because the dashboard is disabled at runtime.
+
+The overlay helper in this recipe is:
+
+```bash
+cd recipes/4x-spark-cluster/glm52-b12x-spark
+BASE_IMAGE=glm-darkdevotion-b12x:20260624-arm64-mtpfix6 \
+IMAGE=glm-darkdevotion-b12x:20260626-arm64-mtpdiag21-draftprob \
+VLLM_SOURCE_DIR=<path-to-your-vllm-fork> \
+./build-glm52-spark-overlay-image.sh
+```
+
+That script does not create the entire stack from scratch. It copies the patched vLLM Python files from `VLLM_SOURCE_DIR` into `/usr/local/lib/python3.12/dist-packages/vllm/...`, builds the named image locally, and then builds the same image on the worker hosts over SSH. The base image must already contain the compiled vLLM/B12X/CUDA/FlashInfer pieces and Ray.
+
 Key build/runtime requirements:
 
 ```text
@@ -165,7 +181,15 @@ Look for `MemAvailable`, `SwapFree`, `SwapCached`, and whether one node is mater
 
 ## Ray setup
 
-The vLLM container no longer assumes a heavyweight Ray install. We run Ray inside the serving container and slim it down aggressively.
+Ray runs inside the Docker containers created by `launch-ray.sh`; it is not a host-level Ray cluster. The container image named by `IMAGE` must already have `ray`, `vllm`, B12X, CUDA, and FlashInfer installed.
+
+The launcher first removes stale containers, then starts a head container on `192.168.100.1` and worker containers on `192.168.100.2`, `192.168.100.3`, and `192.168.100.4`. Each container uses host networking, host IPC, all GPUs, `memlock=-1`, and a read-only model bind mount:
+
+```text
+-v /var/tmp/models/Mapika/GLM-5.2-NVFP4-MTP-hybrid:/models:ro
+```
+
+Inside those containers, Ray is slimmed down aggressively.
 
 Head node shape:
 
@@ -238,7 +262,7 @@ VLLM_KZ_TRIM_AFTER_LOAD=1
 The launch command is:
 
 ```bash
-cd /home/matt/code/blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark
+cd recipes/4x-spark-cluster/glm52-b12x-spark
 ./launch-ray.sh
 ENV_FILE=$PWD/glm52-dcp4-mtp1-128k.env PATCH_DIAGNOSTICS=1 ./launch-glm52-mtp3-dcp4-128k.sh
 ```
