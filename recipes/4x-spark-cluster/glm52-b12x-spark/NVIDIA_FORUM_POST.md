@@ -109,7 +109,7 @@ https://github.com/m9e/blackwell-llm-docker/tree/main/recipes/4x-spark-cluster/g
 vLLM patch branch:
 
 ```text
-https://github.com/m9e/vllm/tree/codex/glm52-spark-dcp-mtp-patches
+https://github.com/m9e/vllm
 ```
 
 I am publishing the recipe and patches so other Spark owners can reproduce or improve it.

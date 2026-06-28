@@ -68,7 +68,7 @@ https://github.com/m9e/blackwell-llm-docker/tree/main/recipes/4x-spark-cluster/g
 The vLLM patch branch is:
 
 ```text
-https://github.com/m9e/vllm/tree/codex/glm52-spark-dcp-mtp-patches
+https://github.com/m9e/vllm
 ```
 
 I will keep polishing the branches/docs, but the current production recommendation is simple:
