@@ -117,7 +117,7 @@ That avoids hangs in the multi-node Ray-on-Spark path before model load. The nor
 
 This work only fit reliably after treating every node as an inference appliance.
 
-Disable services that are irrelevant on headless Spark inference nodes:
+Disable services that are irrelevant on headless Spark inference nodes. Warning: the desktop-service commands below intentionally disable the desktop GUI. Do not run them on a Spark you still use as an interactive desktop:
 
 ```bash
 sudo systemctl disable --now cups cups-browsed avahi-daemon bluetooth ModemManager colord fwupd packagekit apport upower udisks2 switcheroo-control rtkit-daemon snapd || true

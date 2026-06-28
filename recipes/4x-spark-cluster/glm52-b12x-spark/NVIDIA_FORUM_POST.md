@@ -22,7 +22,7 @@ Fitted capacity: 132,096 KV tokens
 Decode speed:    about 14.5-15.2 output tok/s for short codegen prompts
 ```
 
-The main lesson is that the OS and Ray footprint matter on Spark. The successful run required treating the nodes as dedicated inference appliances. We disabled irrelevant desktop/headless services, reduced journal footprint, drained swap before clean launches, and slimmed Ray down.
+The main lesson is that the OS and Ray footprint matter on Spark. The successful run required treating the nodes as dedicated inference appliances. We disabled irrelevant desktop/headless services, reduced journal footprint, drained swap before clean launches, and slimmed Ray down. Important: the desktop-service pruning disables the desktop GUI, so only do this on headless inference nodes.
 
 Ray launch details:
 

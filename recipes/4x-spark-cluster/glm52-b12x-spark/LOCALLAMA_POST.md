@@ -33,7 +33,7 @@ Object spilling to /var/tmp/ray-spill
 host networking and host IPC
 ```
 
-The OS also matters. I disabled irrelevant headless-node services like cups, avahi, bluetooth, ModemManager, colord, fwupd, packagekit, desktop portal/pipewire pieces, etc. On Spark unified memory, a few GB of random Linux/userland overhead can be the difference between fitting and failing.
+The OS also matters. I disabled irrelevant headless-node services like cups, avahi, bluetooth, ModemManager, colord, fwupd, packagekit, desktop portal/pipewire pieces, etc. Important: this disables the desktop GUI; only do this on headless inference nodes. On Spark unified memory, a few GB of random Linux/userland overhead can be the difference between fitting and failing.
 
 Some measured numbers:
 
