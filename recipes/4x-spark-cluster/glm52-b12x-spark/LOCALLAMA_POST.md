@@ -74,7 +74,13 @@ A key practical detail: use the hybrid checkpoint that actually contains `model.
 The full guide and scripts are in the repo recipe:
 
 ```text
-recipes/4x-spark-cluster/glm52-b12x-spark
+https://github.com/m9e/blackwell-llm-docker/tree/codex/glm52-spark-community-guide/recipes/4x-spark-cluster/glm52-b12x-spark
+```
+
+The vLLM patch branch is:
+
+```text
+https://github.com/m9e/vllm/tree/codex/glm52-spark-dcp-mtp-patches
 ```
 
 I will keep polishing the branches/docs, but the current production recommendation is simple:

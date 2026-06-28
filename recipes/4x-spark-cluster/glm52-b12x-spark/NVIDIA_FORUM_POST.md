@@ -103,4 +103,16 @@ Heavy Ray dashboard/default services: waste too much memory
 
 The model checkpoint detail matters. The working setup uses the hybrid GLM-5.2 NVFP4 MTP checkpoint that contains `model.layers.78.*`. There is one actual MTP layer, so MTP1 is the production point. MTP2/MTP3 recursively reuse the same one-step predictor and are not currently the safe default.
 
+Recipe branch:
+
+```text
+https://github.com/m9e/blackwell-llm-docker/tree/codex/glm52-spark-community-guide/recipes/4x-spark-cluster/glm52-b12x-spark
+```
+
+vLLM patch branch:
+
+```text
+https://github.com/m9e/vllm/tree/codex/glm52-spark-dcp-mtp-patches
+```
+
 I am publishing the recipe and patches so other Spark owners can reproduce or improve it.
