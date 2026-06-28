@@ -309,18 +309,7 @@ Prompt size  TTFT / prefill     Approx prefill rate    Decode after TTFT
 
 The older blended wall-clock summary rates were about 4.7, 3.0, 1.7, and 1.0 tok/s at 16K, 32K, 64K, and 112K respectively. Those are end-to-end user-wait rates for short summaries, not decode rates.
 
-A bs=8 test with eight unique codegen prompts did not true-batch because production uses `MAX_NUM_SEQS=1`:
-
-```text
-Completed:                8/8
-Total completion tokens:  3916
-Wall time:                264.897 s
-Aggregate throughput:     14.783 tok/s
-Prefix cache hit rate:    0.0%
-Scheduler:                one running, seven waiting, then draining
-```
-
-That is expected for the production 128K single-user profile. A separate batch-serving profile should lower context and raise `MAX_NUM_SEQS`.
+This is a single-long-context profile, not a batch-serving profile. It uses `MAX_NUM_SEQS=1`, so concurrent requests queue. To make a batch-serving variant, raise `MAX_NUM_SEQS` and re-fit the KV budget, usually by lowering `MAX_MODEL_LEN` or accepting less 128K headroom. That tradeoff is intentionally left to the reader.
 
 ## DCP1 and DCP2 tradeoff
 
@@ -386,5 +375,4 @@ After launch:
 Run a short unique prompt
 Check prefix cache hit rate when measuring
 Check post-TTFT decode separately from prefill-heavy end-to-end speed
-Do not judge bs=8 from the 128K profile unless MAX_NUM_SEQS is changed
 ```

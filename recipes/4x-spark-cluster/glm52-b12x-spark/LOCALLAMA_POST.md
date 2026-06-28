@@ -45,17 +45,7 @@ Post-TTFT decode:            about 13 tok/s at 32K-112K prompt sizes
 
 The summary wall-clock rates look much lower only if prefill/TTFT is blended into generation time. I would not quote those as decode throughput.
 
-Important caveat on batching: the 128K profile is `MAX_NUM_SEQS=1`. I tested 8 simultaneous unique codegen prompts and it queued rather than true-batched:
-
-```text
-8/8 completed
-3916 completion tokens
-264.897 seconds wall
-14.783 aggregate tok/s
-prefix cache hit rate 0.0%
-```
-
-So this is a single-long-context profile, not a batch-serving profile. For bs=8 I would build a separate lower-context config with higher `MAX_NUM_SEQS`.
+Important caveat on concurrency: the 128K profile is `MAX_NUM_SEQS=1`, so concurrent requests queue. This is a single-long-context recipe, not a batch-serving recipe. A batch-oriented variant should raise `MAX_NUM_SEQS` and re-fit the KV budget, probably by lowering max context. Exercise left to the reader.
 
 What did not work:
 

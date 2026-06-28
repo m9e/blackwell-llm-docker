@@ -86,7 +86,7 @@ Post-TTFT decode:      about 13 tok/s at 32K-112K prompt sizes
 
 The long-context summary wall-clock results are prefill-dominated. Decode after first token remains much closer to short-context speed, so do not quote blended summary wall-clock rates as decode throughput.
 
-A batch note: this 128K profile uses `MAX_NUM_SEQS=1`. An 8-concurrent-prompt test queued rather than true-batched and produced about 14.8 aggregate tok/s. That is expected and not a batch-throughput profile.
+Concurrency note: this 128K profile uses `MAX_NUM_SEQS=1`, so concurrent requests queue. This is expected for the single-long-context target. A batch-serving variant should raise `MAX_NUM_SEQS` and re-fit the KV budget, probably by lowering max context.
 
 What failed or was not promoted:
 
