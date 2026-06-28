@@ -348,7 +348,7 @@ The result is a working inference configuration, not a full model-quality certif
 Before launch:
 
 ```text
-All four nodes can reach each other on 192.168.100.x
+All four nodes can reach each other on the IB/RoCE fabric
 Model path exists and is identical on every host
 High-speed interface is up and selected
 Unneeded desktop/system services are disabled

@@ -12,7 +12,7 @@ Profile:  TP4 / PP1 / DCP4 / MTP1
 KV:       fp8, explicit 1.81 GB/rank
 Context:  131,072 requested, 132,096 token fitted KV capacity
 Speed:    about 14.5-15.2 output tok/s on short-prompt codegen
-Batch:    max_num_seqs=1 production profile; bs=8 queues and stays about 14.8 aggregate tok/s
+Batch:    max_num_seqs=1; concurrent requests queue by design
 ```
 
 The current live/tested environment file is:
@@ -148,26 +148,15 @@ DCP4 / 128K / MTP2: sometimes viable, but less stable and more memory sensitive
 DCP4 / 128K / MTP3: not promoted; acceptance collapses in later speculative positions
 ```
 
-## Batch behavior
+## Request concurrency
 
-The production profile is intentionally configured for one long-context request at a time:
+This recipe is intentionally configured for one long-context request at a time:
 
 ```text
 MAX_NUM_SEQS=1
 ```
 
-A test with 8 simultaneous unique codegen prompts confirmed that this profile queues rather than true-batches:
-
-```text
-Requests completed:       8/8
-Total completion tokens:  3916
-Wall time:                264.897 s
-Aggregate throughput:     14.783 completion tok/s
-Prefix cache hit rate:    0.0%
-Scheduler behavior:       Running 1 request, Waiting 7 then draining
-```
-
-That is expected. To optimize bs=8, use a separate lower-context profile with larger `MAX_NUM_SEQS` and a different KV budget.
+Concurrent requests will queue. A batch-oriented variant should raise `MAX_NUM_SEQS`, but that spends KV/cache and scheduler headroom that this recipe uses for the 128K single-request target. The usual approach is to lower `MAX_MODEL_LEN` or `KV_CACHE_MEMORY_BYTES` expectations, raise `MAX_NUM_SEQS`, and re-fit capacity. That variant is left to the reader.
 
 ## Long-prompt behavior
 
