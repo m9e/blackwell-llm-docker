@@ -103,7 +103,7 @@ The model checkpoint detail matters. The working setup uses the hybrid GLM-5.2 N
 Recipe branch:
 
 ```text
-https://github.com/m9e/blackwell-llm-docker/tree/codex/glm52-spark-community-guide/recipes/4x-spark-cluster/glm52-b12x-spark
+https://github.com/m9e/blackwell-llm-docker/tree/main/recipes/4x-spark-cluster/glm52-b12x-spark
 ```
 
 vLLM patch branch:

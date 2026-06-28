@@ -62,7 +62,7 @@ A key practical detail: use the hybrid checkpoint that actually contains `model.
 The full guide and scripts are in the repo recipe:
 
 ```text
-https://github.com/m9e/blackwell-llm-docker/tree/codex/glm52-spark-community-guide/recipes/4x-spark-cluster/glm52-b12x-spark
+https://github.com/m9e/blackwell-llm-docker/tree/main/recipes/4x-spark-cluster/glm52-b12x-spark
 ```
 
 The vLLM patch branch is:
