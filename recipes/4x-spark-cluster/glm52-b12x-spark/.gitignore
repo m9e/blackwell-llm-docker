@@ -1,0 +1,5 @@
+logs/
+corpus/
+*.output.txt
+__pycache__/
+*.pyc

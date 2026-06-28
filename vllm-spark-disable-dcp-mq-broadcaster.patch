@@ -1,0 +1,40 @@
+diff --git a/vllm/distributed/parallel_state.py b/vllm/distributed/parallel_state.py
+index 44dcf28..1b23df2 100644
+--- a/vllm/distributed/parallel_state.py
++++ b/vllm/distributed/parallel_state.py
+@@ -25,6 +25,7 @@ If you only need to use the distributed environment without model/pipeline
+ 
+ import contextlib
+ import gc
++import os
+ import pickle
+ import weakref
+ from collections import namedtuple
+@@ -1762,12 +1763,16 @@ def initialize_model_parallel(
+     if enable_elastic_ep:
+         group_ranks = local_all_ranks.view(-1, tensor_model_parallel_size).unbind(0)
+         group_ranks = [x.tolist() for x in group_ranks]
+-    # message queue broadcaster is only used in tensor model parallel group
++    # message queue broadcaster is normally used in tensor/decode-context
++    # model parallel groups.
++    # It can hang in multi-node Ray-on-DGX-Spark launches before model load,
++    # while the normal process-group path is sufficient for this topology.
++    use_mq_broadcaster = os.environ.get("VLLM_DISABLE_TP_MQ_BROADCASTER") != "1"
+     _TP = init_model_parallel_group(
+         group_ranks,
+         get_world_group().local_rank,
+         backend,
+-        use_message_queue_broadcaster=True,
++        use_message_queue_broadcaster=use_mq_broadcaster,
+         group_name="tp",
+     )
+ 
+@@ -1789,7 +1794,7 @@ def initialize_model_parallel(
+         group_ranks,
+         get_world_group().local_rank,
+         backend,
+-        use_message_queue_broadcaster=True,
++        use_message_queue_broadcaster=use_mq_broadcaster,
+         group_name="dcp",
+     )
+ 
