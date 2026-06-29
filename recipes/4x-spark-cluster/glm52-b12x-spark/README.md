@@ -41,18 +41,25 @@ glm52-dcp4-mtp2-120k-loose.env        experimental 120K/MTP2 profile
 launch-glm52-mtp3-dcp4-128k.sh        generic current launcher used by MTP1/MTP2/MTP3 env files
 launch-glm52-mtp1-dcp4-128k.sh        frozen clean MTP1 launcher
 COMMUNITY_HOWTO_GLM52_SPARK.md        full reproducible guide
-LOCALLAMA_POST.md                     community post draft
 NVIDIA_FORUM_POST.md                  forum post draft
+prepare-glm52-mtp-hybrid.sh           assembles base checkpoint plus public MTP overlay
 MTP_ITERATIVE_DCP_DIAGNOSIS.md        investigation notes on MTP2/MTP3 and DCP
 SOULKILLER_MEMORY_PRUNE_20260627.md   memory-pruning checklist for Spark nodes
 ```
 
 ## Launch sequence
 
-1. Put GLM-5.2 NVFP4 MTP hybrid weights on all four hosts at the same path.
+1. Assemble the local hybrid checkpoint on each Spark.
+
+```bash
+cd recipes/4x-spark-cluster/glm52-b12x-spark
+./prepare-glm52-mtp-hybrid.sh
+```
+
+This downloads `Mapika/GLM-5.2-NVFP4` plus the public `sant1an/GLM-5.2-NVFP4-MTP` overlay and creates:
 
 ```text
-/models
+/var/tmp/models/Mapika/GLM-5.2-NVFP4-MTP-hybrid
 ```
 
 2. Start the Ray cluster inside the vLLM container.

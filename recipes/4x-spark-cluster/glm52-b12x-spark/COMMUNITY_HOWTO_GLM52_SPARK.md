@@ -47,7 +47,7 @@ The final recipe lives in:
 blackwell-llm-docker/recipes/4x-spark-cluster/glm52-b12x-spark
 ```
 
-The key runtime dependency is a vLLM fork carrying DCP and B12X changes. The final writeup should link the published branch after it is pushed.
+The key runtime dependency is a vLLM fork carrying DCP and B12X changes. The recipe links the published fork used for this work.
 
 Historical references that informed this setup:
 
@@ -60,19 +60,33 @@ spark-vllm-docker Spark container work
 
 ## Model checkpoint
 
-Use the hybrid checkpoint with a real MTP layer:
+Use the Mapika base checkpoint plus the public MTP overlay and assemble them locally. The helper script is:
+
+```bash
+cd recipes/4x-spark-cluster/glm52-b12x-spark
+./prepare-glm52-mtp-hybrid.sh
+```
+
+By default it downloads:
+
+```text
+Mapika/GLM-5.2-NVFP4
+sant1an/GLM-5.2-NVFP4-MTP
+```
+
+and creates the local directory mounted by the launcher:
 
 ```text
 /var/tmp/models/Mapika/GLM-5.2-NVFP4-MTP-hybrid
 ```
 
-It must contain:
+That final directory must contain:
 
 ```text
 model.layers.78.*
 ```
 
-The base GLM checkpoint advertises MTP metadata but lacks the actual layer 78 weights. That can lead to failed or misleading MTP tests. Earlier no-MTP experiments temporarily removed layer 78 because vLLM can load it if it exists even when not declared. The production MTP1 setup requires it.
+The base GLM checkpoint lacks the actual layer 78 MTP weights. Enabling MTP against the base directory will fail or produce misleading tests. Earlier no-MTP experiments temporarily removed layer 78 because vLLM can load it if it exists even when not declared. The production MTP1 setup requires the assembled hybrid directory.
 
 The checkpoint has one actual MTP layer, not three. MTP1 is therefore the natural production point. MTP2/MTP3 recursively reuse the same one-step predictor and are treated as experimental.
 

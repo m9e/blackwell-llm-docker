@@ -98,7 +98,7 @@ NCCL_IB_DISABLE=1: severe regression on Spark
 Heavy Ray dashboard/default services: waste too much memory
 ```
 
-The model checkpoint detail matters. Use `Mapika/GLM-5.2-NVFP4` plus the public `sant1an/GLM-5.2-NVFP4-MTP` overlay and assemble them locally. The final directory must contain `model.layers.78.*`. The working setup uses the hybrid GLM-5.2 NVFP4 MTP checkpoint that contains `model.layers.78.*`. There is one actual MTP layer, so MTP1 is the production point. MTP2/MTP3 recursively reuse the same one-step predictor and are not currently the safe default.
+The model checkpoint detail matters. Use `Mapika/GLM-5.2-NVFP4` plus the public `sant1an/GLM-5.2-NVFP4-MTP` overlay and assemble them locally. The final directory must contain `model.layers.78.*`. There is one actual MTP layer, so MTP1 is the production point. MTP2/MTP3 recursively reuse the same one-step predictor and are not currently the safe default.
 
 Recipe branch:
 
