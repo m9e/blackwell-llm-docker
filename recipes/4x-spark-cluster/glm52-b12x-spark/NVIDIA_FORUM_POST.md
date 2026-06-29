@@ -10,7 +10,7 @@ Configuration:
 Hardware:        4x DGX Spark / GB10, one GPU per node
 Network:         Spark high-speed fabric, NCCL/RDMA enabled
 Interface:       enP2p1s0f0np0
-Model:           GLM-5.2 NVFP4 MTP hybrid
+Model:           Mapika GLM-5.2 NVFP4 plus public MTP overlay assembled locally
 Runtime:         vLLM fork with DCP and B12X patches
 Parallelism:     TP4 / PP1 / DCP4
 Spec decode:     MTP1
@@ -98,7 +98,7 @@ NCCL_IB_DISABLE=1: severe regression on Spark
 Heavy Ray dashboard/default services: waste too much memory
 ```
 
-The model checkpoint detail matters. The working setup uses the hybrid GLM-5.2 NVFP4 MTP checkpoint that contains `model.layers.78.*`. There is one actual MTP layer, so MTP1 is the production point. MTP2/MTP3 recursively reuse the same one-step predictor and are not currently the safe default.
+The model checkpoint detail matters. Use `Mapika/GLM-5.2-NVFP4` plus the public `sant1an/GLM-5.2-NVFP4-MTP` overlay and assemble them locally. The final directory must contain `model.layers.78.*`. The working setup uses the hybrid GLM-5.2 NVFP4 MTP checkpoint that contains `model.layers.78.*`. There is one actual MTP layer, so MTP1 is the production point. MTP2/MTP3 recursively reuse the same one-step predictor and are not currently the safe default.
 
 Recipe branch:
 

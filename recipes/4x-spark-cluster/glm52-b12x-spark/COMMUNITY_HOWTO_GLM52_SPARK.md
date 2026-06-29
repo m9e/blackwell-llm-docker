@@ -7,7 +7,7 @@ This guide documents a working 4x DGX Spark setup for GLM-5.2 NVFP4 with 128K co
 ```text
 Hardware:      4x NVIDIA DGX Spark / GB10, one GPU per node
 Interconnect:  Spark high-speed fabric via enP2p1s0f0np0, NCCL IB enabled
-Model:         Mapika/GLM-5.2-NVFP4-MTP-hybrid
+Model:         Mapika/GLM-5.2-NVFP4 plus public MTP overlay assembled locally
 Runtime:       vLLM fork with DCP + B12X + Spark patches
 Serving shape: TP4 / PP1 / DCP4 / MTP1
 Attention:     B12X sparse MLA

@@ -6,7 +6,7 @@ Main result:
 
 ```text
 Hardware: 4x NVIDIA DGX Spark / GB10, one GPU per host
-Model:    Mapika/GLM-5.2-NVFP4-MTP-hybrid
+Model:    Mapika/GLM-5.2-NVFP4 plus public MTP overlay assembled locally
 Runtime:  vLLM fork with dark-devotion DCP + B12X patches
 Profile:  TP4 / PP1 / DCP4 / MTP1
 KV:       fp8, explicit 1.81 GB/rank
