@@ -62,21 +62,27 @@ This downloads `Mapika/GLM-5.2-NVFP4` plus the public `sant1an/GLM-5.2-NVFP4-MTP
 /var/tmp/models/Mapika/GLM-5.2-NVFP4-MTP-hybrid
 ```
 
-2. Start the Ray cluster inside the vLLM container.
+2. Start the current 128K/MTP1 serving profile. This wrapper restarts the recipe Ray containers and then launches vLLM.
 
 ```bash
 cd recipes/4x-spark-cluster/glm52-b12x-spark
-./launch-ray.sh
+./start-glm52-dcp4-mtp1-128k.sh
 ```
 
-3. Start the current 128K/MTP1 serving profile.
+To stop it before switching models:
 
 ```bash
 cd recipes/4x-spark-cluster/glm52-b12x-spark
-ENV_FILE=$PWD/glm52-dcp4-mtp1-128k.env PATCH_DIAGNOSTICS=1 ./launch-glm52-mtp3-dcp4-128k.sh
+./stop-glm52-spark.sh
 ```
 
-4. Check readiness from the head node.
+For a more aggressive local cleanup before changing or restarting models:
+
+```bash
+DRAIN_SWAP=1 DROP_CACHES=1 ./stop-glm52-spark.sh
+```
+
+3. Check readiness from the head node.
 
 ```bash
 curl http://192.168.100.1:18089/v1/models
