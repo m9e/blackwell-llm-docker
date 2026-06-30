@@ -15,6 +15,16 @@ SSH_USER="$USER"
 NO_BUILD=false
 VLLM_REF="main"
 VLLM_REF_SET=false
+VLLM_REPO="https://github.com/vllm-project/vllm.git"
+VLLM_REPO_SET=false
+VLLM_COMMIT=""
+VLLM_COMMIT_SET=false
+B12X_REPO=""
+B12X_REPO_SET=false
+B12X_REF="main"
+B12X_REF_SET=false
+B12X_COMMIT=""
+B12X_COMMIT_SET=false
 FLASHINFER_REF="main"
 FLASHINFER_REF_SET=false
 TMP_IMAGE=""
@@ -273,7 +283,12 @@ usage() {
     echo "  --gpu-arch <arch>             : GPU architecture (default: '12.1a')"
     echo "  --rebuild-flashinfer          : Force rebuild of FlashInfer wheels (ignore cached wheels)"
     echo "  --rebuild-vllm                : Force rebuild of vLLM wheels (ignore cached wheels)"
+    echo "  --vllm-repo <url>             : vLLM git repository (default: '$VLLM_REPO')"
     echo "  --vllm-ref <ref>              : vLLM commit SHA, branch or tag (default: 'main')"
+    echo "  --vllm-commit <sha>           : Assert the checked-out vLLM commit"
+    echo "  --b12x-repo <url>             : Optional B12X git repository to install in runner image"
+    echo "  --b12x-ref <ref>              : B12X commit SHA, branch, tag, or refs/* (default: 'main')"
+    echo "  --b12x-commit <sha>           : Assert the checked-out B12X commit"
     echo "  --flashinfer-ref <ref>        : FlashInfer commit SHA, branch or tag (default: 'main')"
     echo "  -c, --copy-to <hosts>         : Host(s) to copy the image to. Accepts comma or space-delimited lists."
     echo "      --copy-to-host            : Alias for --copy-to (backwards compatibility)."
@@ -302,7 +317,12 @@ while [[ "$#" -gt 0 ]]; do
         --gpu-arch) GPU_ARCH_LIST="$2"; shift ;;
         --rebuild-flashinfer) REBUILD_FLASHINFER=true ;;
         --rebuild-vllm) REBUILD_VLLM=true ;;
+        --vllm-repo) VLLM_REPO="$2"; VLLM_REPO_SET=true; shift ;;
         --vllm-ref) VLLM_REF="$2"; VLLM_REF_SET=true; shift ;;
+        --vllm-commit) VLLM_COMMIT="$2"; VLLM_COMMIT_SET=true; shift ;;
+        --b12x-repo) B12X_REPO="$2"; B12X_REPO_SET=true; shift ;;
+        --b12x-ref) B12X_REF="$2"; B12X_REF_SET=true; shift ;;
+        --b12x-commit) B12X_COMMIT="$2"; B12X_COMMIT_SET=true; shift ;;
         --flashinfer-ref) FLASHINFER_REF="$2"; FLASHINFER_REF_SET=true; shift ;;
         -c|--copy-to|--copy-to-host|--copy-to-hosts)
             COPY_TO_FLAG=true
@@ -423,7 +443,12 @@ if [ -n "$FLASHINFER_PRS" ]; then
 fi
 
 if [ "$EXP_MXFP4" = true ]; then
+    if [ "$VLLM_REPO_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --vllm-repo"; exit 1; fi
+    if [ "$VLLM_COMMIT_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --vllm-commit"; exit 1; fi
     if [ "$VLLM_REF_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --vllm-ref"; exit 1; fi
+    if [ "$B12X_REPO_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --b12x-repo"; exit 1; fi
+    if [ "$B12X_COMMIT_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --b12x-commit"; exit 1; fi
+    if [ "$B12X_REF_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --b12x-ref"; exit 1; fi
     if [ "$FLASHINFER_REF_SET" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --flashinfer-ref"; exit 1; fi
     if [ "$PRE_TRANSFORMERS" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --tf5"; exit 1; fi
     if [ "$REBUILD_FLASHINFER" = true ]; then echo "Error: --exp-mxfp4 is incompatible with --rebuild-flashinfer"; exit 1; fi
@@ -471,6 +496,13 @@ fi
 COMMON_BUILD_FLAGS+=("--build-arg" "BUILD_JOBS=$BUILD_JOBS")
 COMMON_BUILD_FLAGS+=("--build-arg" "TORCH_CUDA_ARCH_LIST=$GPU_ARCH_LIST")
 COMMON_BUILD_FLAGS+=("--build-arg" "FLASHINFER_CUDA_ARCH_LIST=$GPU_ARCH_LIST")
+if [ -n "$B12X_REPO" ]; then
+    COMMON_BUILD_FLAGS+=("--build-arg" "B12X_REPO=$B12X_REPO")
+    COMMON_BUILD_FLAGS+=("--build-arg" "B12X_REF=$B12X_REF")
+    if [ -n "$B12X_COMMIT" ]; then
+        COMMON_BUILD_FLAGS+=("--build-arg" "B12X_COMMIT=$B12X_COMMIT")
+    fi
+fi
 if [ -n "$NETWORK_ARG" ]; then
     COMMON_BUILD_FLAGS+=("--network" "$NETWORK_ARG")
 fi
@@ -569,13 +601,15 @@ if [ "$NO_BUILD" = false ]; then
         # ----------------------------------------------------------
         # Phase 2: vLLM wheels
         # ----------------------------------------------------------
-        if [ "$VLLM_REF_SET" = true ] || [ -n "$VLLM_PRS" ]; then
+        if [ "$VLLM_REF_SET" = true ] || [ "$VLLM_REPO_SET" = true ] || [ "$VLLM_COMMIT_SET" = true ] || [ -n "$VLLM_PRS" ]; then
             REBUILD_VLLM=true
         fi
 
         BUILD_VLLM=false
         if [ "$REBUILD_VLLM" = true ]; then
-            if [ "$VLLM_REF_SET" = true ] && [ -n "$VLLM_PRS" ]; then
+            if [ "$VLLM_REPO_SET" = true ] || [ "$VLLM_COMMIT_SET" = true ]; then
+                echo "Rebuilding vLLM wheels (--vllm-repo/--vllm-commit specified)..."
+            elif [ "$VLLM_REF_SET" = true ] && [ -n "$VLLM_PRS" ]; then
                 echo "Rebuilding vLLM wheels (--vllm-ref and --apply-vllm-pr specified)..."
             elif [ "$VLLM_REF_SET" = true ]; then
                 echo "Rebuilding vLLM wheels (--vllm-ref specified)..."
@@ -606,7 +640,12 @@ if [ "$NO_BUILD" = false ]; then
                 "--target" "vllm-export"
                 "--output" "type=local,dest=./wheels"
                 "${COMMON_BUILD_FLAGS[@]}"
+                "--build-arg" "VLLM_REPO=$VLLM_REPO"
                 "--build-arg" "VLLM_REF=$VLLM_REF")
+
+            if [ -n "$VLLM_COMMIT" ]; then
+                VLLM_CMD+=("--build-arg" "VLLM_COMMIT=$VLLM_COMMIT")
+            fi
 
             if [ "$REBUILD_VLLM" = true ]; then
                 VLLM_CMD+=("--build-arg" "CACHEBUST_VLLM=$(date +%s)")

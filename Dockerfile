@@ -46,9 +46,12 @@ RUN apt update && \
     && pip install uv
 
 # Additional deps
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-     uv pip install torch torchvision torchaudio triton --index-url https://download.pytorch.org/whl/nightly/cu130 && \
-     uv pip install nvidia-nvshmem-cu13 "apache-tvm-ffi<0.2" filelock pynvml requests tqdm
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+     python3 -m pip install --default-timeout=600 \
+         torch torchvision torchaudio triton \
+         --index-url https://download.pytorch.org/whl/nightly/cu130 && \
+     python3 -m pip install --default-timeout=600 \
+         nvidia-nvshmem-cu13 "apache-tvm-ffi<0.2" filelock pynvml requests tqdm
 
 # Configure Ccache for CUDA/C++
 ENV PATH=/usr/lib/ccache:$PATH
@@ -140,8 +143,10 @@ RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     patch -p1 < flashinfer_cache.patch && \
     # flashinfer-python
     sed -i -e 's/license = "Apache-2.0"/license = { text = "Apache-2.0" }/' -e '/license-files/d' pyproject.toml && \
+    sed -i 's/from setuptools.command import bdist_wheel as setuptools_bdist_wheel/import wheel.bdist_wheel as setuptools_bdist_wheel/g' flashinfer-jit-cache/build_backend.py && \
     uv build --no-build-isolation --wheel . --out-dir=/workspace/wheels -v && \
     # flashinfer-cubin
+    python3 -m pip install packaging setuptools wheel && \
     cd flashinfer-cubin && uv build --no-build-isolation --wheel . --out-dir=/workspace/wheels -v && \
     # flashinfer-jit-cache
     cd ../flashinfer-jit-cache && \
@@ -168,14 +173,16 @@ WORKDIR $VLLM_BASE_DIR
 ARG CACHEBUST_VLLM=1
 
 # Git reference (branch, tag, or SHA) to checkout
+ARG VLLM_REPO=https://github.com/vllm-project/vllm.git
 ARG VLLM_REF=main
+ARG VLLM_COMMIT=
 
 # Smart Git Clone (Fetch changes instead of full re-clone)
 RUN --mount=type=cache,id=repo-cache,target=/repo-cache \
     cd /repo-cache && \
     if [ ! -d "vllm" ]; then \
         echo "Cache miss: Cloning vLLM from scratch..." && \
-        git clone --recursive https://github.com/vllm-project/vllm.git; \
+        git clone --recursive ${VLLM_REPO} vllm; \
         if [ "$VLLM_REF" != "main" ]; then \
             cd vllm && \
             git checkout ${VLLM_REF}; \
@@ -183,12 +190,18 @@ RUN --mount=type=cache,id=repo-cache,target=/repo-cache \
     else \
         echo "Cache hit: Fetching updates..." && \
         cd vllm && \
+        git remote set-url origin ${VLLM_REPO} && \
         git fetch origin && \
         git fetch origin --tags --force && \
         (git checkout --detach origin/${VLLM_REF} 2>/dev/null || git checkout ${VLLM_REF}) && \
         git submodule update --init --recursive && \
         git clean -fdx && \
         git gc --auto; \
+    fi && \
+    cd /repo-cache/vllm && \
+    if [ -n "$VLLM_COMMIT" ]; then \
+        test "$(git rev-parse HEAD)" = "$VLLM_COMMIT" || \
+        (echo "ERROR: VLLM_COMMIT mismatch: HEAD=$(git rev-parse HEAD) expected=$VLLM_COMMIT" >&2; exit 1); \
     fi && \
     cp -a /repo-cache/vllm $VLLM_BASE_DIR/
 
@@ -218,9 +231,15 @@ RUN if [ -n "$VLLM_PRS" ]; then \
 RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
     python3 use_existing_torch.py && \
     sed -i "/flashinfer/d" requirements/cuda.txt && \
-    sed -i '/^triton\b/d' requirements/test.txt && \
-    sed -i '/^fastsafetensors\b/d' requirements/test.txt && \
-    uv pip install -r requirements/build.txt
+    if [ -f requirements/test.txt ]; then \
+        sed -i '/^triton\b/d' requirements/test.txt && \
+        sed -i '/^fastsafetensors\b/d' requirements/test.txt; \
+    fi && \
+    if [ -f requirements/build/cuda.txt ]; then \
+        uv pip install -r requirements/build/cuda.txt; \
+    else \
+        uv pip install -r requirements/build.txt; \
+    fi
 
 # Apply Patches
 # TEMPORARY PATCH for fastsafetensors loading in cluster setup - tracking https://github.com/vllm-project/vllm/issues/34180
@@ -233,6 +252,61 @@ RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
 # TEMPORARY PATCH for broken vLLM build (unguarded Hopper code) - reverting PR #34758 and #34302
 # RUN curl -L https://patch-diff.githubusercontent.com/raw/vllm-project/vllm/pull/34758.diff | patch -p1 -R || echo "Cannot revert PR #34758, skipping"
 # RUN curl -L https://patch-diff.githubusercontent.com/raw/vllm-project/vllm/pull/34302.diff | patch -p1 -R || echo "Cannot revert PR #34302, skipping"
+RUN python3 - <<'PY'
+from pathlib import Path
+import re
+paths = [
+    Path("csrc/cache_kernels.cu"),
+    Path("csrc/libtorch_stable/cache_kernels.cu"),
+]
+path = next((candidate for candidate in paths if candidate.exists()), None)
+if path is None:
+    print("cache_kernels.cu not found, skipping CUDA >= 13 workaround")
+    raise SystemExit(0)
+text = path.read_text()
+if "Resolve cuMemcpyBatchAsync at runtime via cuGetProcAddress" in text:
+    print("cache_kernels.cu uses runtime-resolved cuMemcpyBatchAsync, skipping CUDA >= 13 workaround")
+elif "CUDA_VERSION >= 13000" in text and "cuMemcpyBatchAsync failed with error " in text:
+    print("cache_kernels.cu already handles CUDA >= 13")
+elif "size_t fail_idx = 0;" in text and "&fail_idx" in text:
+    text = text.replace("  size_t fail_idx = 0;\n", "", 1)
+    if "&attrs_idx, 1, &fail_idx, static_cast<CUstream>(stream));" in text:
+        text = text.replace(
+        "&attrs_idx, 1, &fail_idx, static_cast<CUstream>(stream));",
+        "&attrs_idx, 1, static_cast<CUstream>(stream));",
+        1,
+        )
+    else:
+        text = text.replace(
+            """                               static_cast<size_t>(n), &attr, &attrs_idx, 1,
+                               &fail_idx, static_cast<CUstream>(stream));""",
+            """                               static_cast<size_t>(n), &attr, &attrs_idx, 1,
+                               static_cast<CUstream>(stream));""",
+            1,
+        )
+    text = text.replace(
+        """  TORCH_CHECK(result == CUDA_SUCCESS, "cuMemcpyBatchAsync failed at index ",
+              fail_idx, " with error ", result);
+""",
+        """  TORCH_CHECK(result == CUDA_SUCCESS, "cuMemcpyBatchAsync failed with error ",
+              result);
+""",
+        1,
+    )
+    text = text.replace(
+        """    STD_TORCH_CHECK(result == CUDA_SUCCESS,
+                    "cuMemcpyBatchAsync failed at index ", fail_idx,
+                    " with error ", result);
+""",
+        """    STD_TORCH_CHECK(result == CUDA_SUCCESS,
+                    "cuMemcpyBatchAsync failed with error ", result);
+""",
+        1,
+    )
+    path.write_text(text)
+else:
+    raise SystemExit("cache_kernels.cu patch anchor not found")
+PY
 
 # Final Compilation
 RUN --mount=type=cache,id=ccache,target=/root/.ccache \
@@ -246,6 +320,47 @@ RUN --mount=type=cache,id=ccache,target=/root/.ccache \
 # =========================================================
 FROM scratch AS vllm-export
 COPY --from=vllm-builder /workspace/wheels /
+
+# =========================================================
+# STAGE 5b: DeepGEMM Builder
+# =========================================================
+FROM base AS deepgemm-builder
+
+WORKDIR /workspace
+ARG DEEPGEMM_REF=main
+ARG CACHEBUST_DEEPGEMM=1
+
+RUN --mount=type=cache,id=repo-cache,target=/repo-cache \
+    cd /repo-cache && \
+    if [ ! -d "DeepGEMM" ]; then \
+        echo "Cache miss: Cloning DeepGEMM from scratch..." && \
+        git clone --recursive https://github.com/deepseek-ai/DeepGEMM.git; \
+    else \
+        echo "Cache hit: Fetching DeepGEMM updates..." && \
+        cd DeepGEMM && \
+        git fetch origin && \
+        git fetch origin --tags --force && \
+        (git checkout --detach origin/${DEEPGEMM_REF} 2>/dev/null || git checkout ${DEEPGEMM_REF}) && \
+        git submodule sync --recursive && \
+        git submodule update --init --recursive && \
+        git clean -fdx && \
+        git gc --auto; \
+    fi && \
+    cp -a /repo-cache/DeepGEMM /workspace/DeepGEMM
+
+WORKDIR /workspace/DeepGEMM
+
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    python3 -m pip install packaging wheel && \
+    python3 setup.py bdist_wheel && \
+    mkdir -p /workspace/deepgemm-wheels && \
+    cp dist/*.whl /workspace/deepgemm-wheels/
+
+# =========================================================
+# STAGE 5c: DeepGEMM Wheel Export
+# =========================================================
+FROM scratch AS deepgemm-export
+COPY --from=deepgemm-builder /workspace/deepgemm-wheels /
 
 # =========================================================
 # STAGE 6: Runner (Installs wheels from host ./wheels/)
@@ -297,9 +412,12 @@ RUN mkdir -p tiktoken_encodings && \
 ARG PRE_TRANSFORMERS=0
 
 # Install deps
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
-     uv pip install torch torchvision torchaudio triton --index-url https://download.pytorch.org/whl/nightly/cu130 && \
-     uv pip install nvidia-nvshmem-cu13 "apache-tvm-ffi<0.2"
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+     python3 -m pip install --default-timeout=600 \
+         torch torchvision torchaudio triton \
+         --index-url https://download.pytorch.org/whl/nightly/cu130 && \
+     python3 -m pip install --default-timeout=600 \
+         nvidia-nvshmem-cu13 "apache-tvm-ffi<0.2"
 
 # Install wheels from host ./wheels/ (bind-mounted from build context — no layer bloat)
 # With --tf5: override vLLM's transformers<5 constraint to get transformers>=5
@@ -310,6 +428,41 @@ RUN --mount=type=bind,source=wheels,target=/workspace/wheels \
         uv pip install /workspace/wheels/*.whl --override /tmp/tf-override.txt; \
     else \
         uv pip install /workspace/wheels/*.whl; \
+    fi
+
+# Install DeepGEMM from the official repo build.
+RUN --mount=type=bind,from=deepgemm-export,source=/,target=/workspace/deepgemm \
+    python3 -m pip install /workspace/deepgemm/*.whl
+
+# Optionally install B12X from a pinned git ref. This is needed for the
+# dark-devotion GLM sparse-MLA and W4A16 MoE paths; leave B12X_REPO empty for
+# the normal Spark vLLM image.
+ARG B12X_REPO=
+ARG B12X_REF=main
+ARG B12X_COMMIT=
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip \
+    if [ -n "$B12X_REPO" ]; then \
+        python3 -m pip install --default-timeout=600 "nvidia-cutlass-dsl[cu13]" && \
+        python3 -m pip install --default-timeout=600 --force-reinstall --no-deps nvidia-cutlass-dsl-libs-cu13 && \
+        git clone --filter=blob:none "$B12X_REPO" /tmp/b12x-src && \
+        cd /tmp/b12x-src && \
+        if echo "$B12X_REF" | grep -Eq '^[0-9a-f]{40}$'; then \
+            git fetch --depth=1 origin "$B12X_REF"; \
+            git checkout FETCH_HEAD; \
+        elif echo "$B12X_REF" | grep -Eq '^refs/'; then \
+            git fetch origin "$B12X_REF"; \
+            git checkout FETCH_HEAD; \
+        else \
+            git checkout "$B12X_REF"; \
+        fi && \
+        if [ -n "$B12X_COMMIT" ]; then \
+            test "$(git rev-parse HEAD)" = "$B12X_COMMIT" || \
+            (echo "ERROR: B12X_COMMIT mismatch: HEAD=$(git rev-parse HEAD) expected=$B12X_COMMIT" >&2; exit 1); \
+        fi && \
+        python3 -m pip install --no-deps --force-reinstall . && \
+        rm -rf /tmp/b12x-src; \
+    else \
+        echo "B12X_REPO not set; skipping B12X install."; \
     fi
 
 # Setup environment for runtime
